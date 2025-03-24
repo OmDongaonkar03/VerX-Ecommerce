@@ -1,80 +1,20 @@
 <?php 
-include('function.php');
+include_once('function.php');
 
-$userIP = $_SERVER['REMOTE_ADDR'];
-$current_page_url = $_SERVER['REQUEST_URI'];
-$string = exec('getmac');
-$mac = substr($string, 0, 17);
-
-if(isset($_COOKIE['latitude']) && isset($_COOKIE['longitude'])) {
-    $latitude = $_COOKIE['latitude'];
-    $longitude = $_COOKIE['longitude'];
-    
-    $check_sql = mysqli_query($conn,"SELECT count FROM interaction WHERE `MAC addr` = '$mac' AND `pages visited` = '$current_page_url' LIMIT 1");
-    
-    if(mysqli_num_rows($check_sql) > 0) {
-        $update_sql = mysqli_query($conn,"UPDATE interaction SET count = count + 1 WHERE `MAC addr` = '$mac' AND `pages visited` = '$current_page_url'");
-    } else {
-        $insert_sql = mysqli_query($conn,"INSERT INTO `interaction`(`MAC addr`, `IP`, `latitude`, `longitude`, `pages visited`, `count`) 
-        VALUES ('$mac', '$userIP','$latitude', '$longitude', '$current_page_url', 1)");
-    }
+if (!isset($_SESSION['user_email'])) {
+    header("Location: login.php");
+    exit();
 }
 
-$total = 0;
-$email = $_SESSION['user_email'];
+$email = mysqli_real_escape_string($conn, $_SESSION['user_email']);
 
-$query = mysqli_query($conn, "SELECT id FROM signup WHERE email='$email'");
-if ($query) {
-    $user = mysqli_fetch_assoc($query);
-    $uid = $user['id'];
-} else {
-    die("Error: Unable to fetch user data");
-}
+// Get user data
+$user = mysqli_query($conn, sprintf("SELECT * FROM `signup` WHERE `email` = '%s'", $email));
+$Userdata = mysqli_fetch_assoc($user);
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['update_quantity'])) {
-        $pid = $_POST['product_id'];
-        $new_quantity = $_POST['quantity'];
-        
-        $update_query = mysqli_query($conn, "UPDATE atcproduct SET productQuantity = $new_quantity WHERE userID='$uid' AND productID='$pid'");
-        
-        header("Location: " . $_SERVER['PHP_SELF']);
-        exit();
-    }
-    
-    if (isset($_POST['remove_item'])) {
-		
-		$cart_query = mysqli_query($conn, "SELECT * FROM atcproduct WHERE userID='$uid' ORDER BY productID");
-		$cart_items = mysqli_fetch_all($cart_query, MYSQLI_ASSOC);
-		
-		$product_position = $_POST['product_position'];
-		
-		if (isset($cart_items[$product_position]) && 
-			$cart_items[$product_position]['productID'] == $_POST['product_id']) {
-			mysqli_query($conn, "DELETE FROM atcproduct WHERE userID='$uid' AND productID='".$cart_items[$product_position]['productID']."'");
-		}else{
-			echo "<script>alert('error')</script>";
-		}
-		
-		//header("Location: " . $_SERVER['PHP_SELF']);
-		//exit();
-	}
-}
-
-$cart_items_sql = "SELECT a.*, p.* FROM atcproduct a JOIN products p ON a.productID = p.productID WHERE a.userID='$uid'";
-$cart_items_query = mysqli_query($conn, $cart_items_sql);
-
-$cart_data = array();
-$total = 0;
-
-if ($cart_items_query && mysqli_num_rows($cart_items_query) > 0) {
-    while ($item = mysqli_fetch_assoc($cart_items_query)) {
-        $cart_data[] = $item;
-        $total += ($item['productPrice'] * $item['productQuantity']);
-    }
-}
+// User Data
+$Userid = mysqli_real_escape_string($conn, $Userdata['id']);
 ?>
-
 <!DOCTYPE HTML>
 <html lang="en">
 <head>
@@ -84,227 +24,586 @@ if ($cart_items_query && mysqli_num_rows($cart_items_query) > 0) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
+        :root {
+            --primary: #4F46E5;
+            --primary-light: #6366F1;
+            --secondary: #10B981;
+            --dark: #1F2937;
+            --light: #F9FAFB;
+            --border: #E5E7EB;
+            --border-radius: 12px;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #F5F7FA;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        /* Navbar */
+        .navbar {
+            padding: 1rem 0;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Cart Layout */
+        .page-title {
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: var(--dark);
+        }
+
         .cart-container {
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            transition: var(--transition);
         }
-        .product-img {
-            width: 100px;
-            height: 100px;
-            object-fit: cover;
-            border-radius: 8px;
+
+        .cart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.5rem;
         }
-        .quantity-selector {
-            width: 120px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            overflow: hidden;
+
+        /* Product Card */
+        .product-card {
             display: flex;
             align-items: center;
+            padding: 1.5rem 0;
+            border-bottom: 1px solid var(--border);
+            position: relative;
         }
+
+        .product-img-wrapper {
+            width: 110px;
+            height: 110px;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #F3F4F6;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .product-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .product-img:hover {
+            transform: scale(1.05);
+        }
+
+        .product-details {
+            flex-grow: 1;
+            padding: 0 1.5rem;
+        }
+
+        .product-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+            transition: color 0.2s;
+        }
+
+        .product-name:hover {
+            color: var(--primary);
+        }
+
+        .product-meta {
+            color: #6B7280;
+            font-size: 0.9rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .product-meta span {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .product-meta i {
+            margin-right: 4px;
+            font-size: 0.8rem;
+        }
+
+        .product-price {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--dark);
+            margin: 0;
+        }
+
+        .item-total {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--primary);
+            white-space: nowrap;
+        }
+
+        /* Quantity Selector */
+        .quantity-selector {
+            display: flex;
+            align-items: center;
+            background: #F9FAFB;
+            border-radius: 8px;
+            padding: 0.25rem;
+            width: 120px;
+            border: 1px solid var(--border);
+        }
+
         .quantity-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
             border: none;
-            background: none;
-            padding: 0.5rem 1rem;
-            color: #0d6efd;
+            border-radius: 6px;
+            color: var(--dark);
+            font-weight: 600;
+            font-size: 1rem;
             cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
+
+        .quantity-btn:hover {
+            background: var(--primary-light);
+            color: white;
+        }
+
         .quantity-input {
             width: 40px;
             border: none;
+            background: transparent;
             text-align: center;
+            font-weight: 600;
+            color: var(--dark);
             -moz-appearance: textfield;
+            margin: 0 4px;
         }
+
         .quantity-input::-webkit-outer-spin-button,
         .quantity-input::-webkit-inner-spin-button {
             -webkit-appearance: none;
             margin: 0;
         }
-        .remove-btn {
-            color: #dc3545;
-            background: none;
-            border: none;
-            padding: 0.5rem;
-            border-radius: 50%;
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
         }
+
+        .remove-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #FEF2F2;
+            color: #EF4444;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .remove-btn:hover {
+            background: #EF4444;
+            color: white;
+        }
+
+        /* Empty Cart */
+        .empty-cart {
+            text-align: center;
+            padding: 3rem 0;
+        }
+
+        .empty-cart-icon {
+            font-size: 4rem;
+            color: #D1D5DB;
+            margin-bottom: 1.5rem;
+        }
+
+        .empty-cart h5 {
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .empty-cart p {
+            color: #6B7280;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Order Summary */
         .summary-card {
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
             padding: 1.5rem;
+            position: sticky;
+            top: 2rem;
+        }
+
+        .summary-title {
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--dark);
+            font-size: 1.25rem;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .summary-label {
+            color: #6B7280;
+        }
+
+        .summary-value {
+            font-weight: 600;
+        }
+
+        .summary-divider {
+            border-top: 1px solid var(--border);
+            margin: 1rem 0;
+        }
+
+        .summary-total {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            font-size: 1.2rem;
+        }
+
+        .summary-total-label {
+            font-weight: 700;
+        }
+
+        .summary-total-value {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        /* Promo Code */
+        .promo-code {
+            margin-bottom: 1.5rem;
+        }
+
+        .promo-input {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .promo-input input {
+            flex-grow: 1;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .promo-input input:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        .promo-btn {
+            background: #F3F4F6;
+            border: 1px solid var(--border);
+            color: var(--dark);
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 0 1rem;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+        }
+
+        .promo-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* Checkout Button */
+        .checkout-btn {
+            display: block;
+            width: 100%;
+            background: var(--primary);
+            border: none;
+            color: white;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            transition: background 0.2s;
+            text-decoration: none;
+        }
+
+        .checkout-btn:hover {
+            background: var(--primary-light);
+            color: white;
+        }
+
+        .checkout-btn i {
+            margin-right: 0.5rem;
+        }
+
+        /* Continue Shopping */
+        .continue-shopping {
+            display: inline-flex;
+            align-items: center;
+            color: var(--primary);
+            font-weight: 600;
+            text-decoration: none;
+            margin-top: 1rem;
+            transition: color 0.2s;
+        }
+
+        .continue-shopping:hover {
+            color: var(--primary-light);
+        }
+
+        .continue-shopping i {
+            margin-right: 0.5rem;
+        }
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animated {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 991.98px) {
+            .product-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .product-img-wrapper {
+                margin-bottom: 1rem;
+            }
+
+            .product-details {
+                padding: 0;
+                margin-bottom: 1rem;
+                width: 100%;
+            }
+
+            .product-actions {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .quantity-actions {
+                display: flex;
+                width: 100%;
+                gap: 0.5rem;
+            }
+
+            .quantity-selector {
+                flex-grow: 1;
+            }
+
+            .actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .summary-card {
+                position: static;
+                margin-top: 2rem;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Navbar-->
     <?php navbar(); ?>
 
-    <div class="container py-5">
-        <div class="row g-4">
+    <!-- Main Content -->
+    <div class="container py-5 animated">
+        <h2 class="page-title">Your Shopping Cart</h2>
+        
+        <div class="row g-4" id="display">
+            <!-- Cart Items -->
             <div class="col-lg-8">
                 <div class="cart-container">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="cart-header">
                         <h4 class="mb-0">Shopping Cart</h4>
-                        <span class="text-muted"><?php echo count($cart_data); ?> items</span>
+                        <?php
+                        $sql = mysqli_query($conn, sprintf("SELECT * FROM `atcproduct` WHERE `userID` = '%s'", $Userid));
+                        ?>
                     </div>
-
-                    <?php
-                    if (!empty($cart_data)) {
-                        foreach ($cart_data as $index => $item) {
-                            $img = substr($item["product_Image"], 3);
-                            ?>
-                            <div class="border-top py-4">
-                                <div class="row align-items-center">
-                                    <div class="col-12 col-md-2">
-                                        <img src="<?php echo $img; ?>" alt="Product" class="product-img">
-                                    </div>
-                                    
-                                    <div class="col-12 col-md-3">
-                                        <a href="product.php?id=<?php echo $item['productID']; ?>" class="text-decoration-none text-dark">
-                                            <h6><?php echo $item["productName"]; ?></h6>
-                                        </a>
-                                        <p class="text-muted mb-0">
-                                            Category: <?php echo $item["category"]; ?>
-                                        </p>
-                                        <?php if(!empty($item["productColor"])): ?>
-                                        <p class="text-muted mb-0">
-                                            Color: <?php echo $item["productColor"]; ?>
-                                        </p>
-                                        <?php endif; ?>
-                                    </div>
-
-                                    <div class="col-12 col-md-3">
-                                        <div class="quantity-selector d-flex align-items-center">
-                                            <form method="POST" class="d-flex quantity-form">
-                                                <input type="hidden" name="product_id" value="<?php echo $item['productID']; ?>">
-                                                <button type="button" class="quantity-btn" onclick="updateQty(this, -1)">-</button>
-                                                <input type="number" name="quantity" class="quantity-input" 
-                                                       value="<?php echo $item['productQuantity']; ?>" 
-                                                       min="1" data-price="<?php echo $item['productPrice']; ?>" readonly>
-                                                <button type="button" class="quantity-btn" onclick="updateQty(this, 1)">+</button>
-                                                <button type="submit" name="update_quantity" class="btn btn-sm btn-outline-primary ms-2">Update</button>
-                                            </form>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-12 col-md-3">
-                                        <span class="fw-bold item-total">$<?php echo $item['productPrice'] * $item['productQuantity']; ?></span>
-                                    </div>
-
-                                    <form method="POST">
-										<input type="hidden" id="5" name="product_position" value="<?php echo $index; ?>">
-										<input type="hidden" name="product_id" value="<?php echo $item['productID']; ?>">
-										<button type="submit" name="remove_item" class="remove-btn">
-											<i class="fas fa-times"></i>
-										</button>
-									</form>
+                
+                    <div id="cartItems">
+                        <?php
+                        if (mysqli_num_rows($sql) > 0) {
+                            while ($data = mysqli_fetch_assoc($sql)) {
+                                $productID = htmlspecialchars($data['productID'], ENT_QUOTES, 'UTF-8');
+                                $productName = htmlspecialchars($data['productName'], ENT_QUOTES, 'UTF-8');
+                                $productPrice = htmlspecialchars($data['productPrice'], ENT_QUOTES, 'UTF-8');
+                                $productImage = htmlspecialchars($data['productImage'], ENT_QUOTES, 'UTF-8');
+                                $productCategory = htmlspecialchars($data['productCategory'], ENT_QUOTES, 'UTF-8');
+                                $productQuantity = htmlspecialchars($data['productQuantity'], ENT_QUOTES, 'UTF-8');
+                        ?>
+                        <div class="product-card animated" style="animation-delay: 0.3s">
+                            <div class="product-img-wrapper">
+                                <img src="<?php echo $productImage; ?>" alt="<?php echo $productName; ?>" class="product-img">
+                            </div>
+                            
+                            <div class="product-details">
+                                <a href="#" class="text-decoration-none">
+                                    <h5 class="product-name"><?php echo $productName; ?></h5>
+                                </a>
+                                <div class="product-meta">
+                                    <span><i class="fas fa-tag"></i> <?php echo $productCategory; ?></span>
+                                </div>
+                                <p class="product-price mt-2">₹<?php echo $productPrice; ?></p>
+                            </div>
+                            
+                            <div class="product-actions d-flex gap-4">
+                                <div class="quantity-actions">
+                                    <div class="quantity-selector">
+                                        <button type="button" class="quantity-btn" onclick="updateQty(<?php echo $productID; ?>, 'sub')">-</button>
+                                        <input type="number" class="quantity-input" value="<?php echo $productQuantity; ?>" min="1" readonly>
+                                        <button type="button" class="quantity-btn" onclick="updateQty(<?php echo $productID; ?>, 'add')">+</button>
+                                    </div>  
+                                </div>
+                                <div class="actions gap-3">
+                                    <span class="item-total">₹<?php echo floatval($productPrice) * intval($productQuantity); ?></span>
+                                    <button type="button" class="remove-btn" onclick="removeItem(<?php echo $productID; ?>)">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
                             </div>
-                            <?php
-                        }
-                    } else {
-                        ?>
-                        <div class="text-center py-5">
-                            <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
-                            <h5>Your cart is empty</h5>
-                            <p class="text-muted">Browse our products and add items to your cart</p>
-                            <a href="productpage.php" class="btn btn-primary">Continue Shopping</a>
                         </div>
                         <?php
-                    }
-                    ?>
+                            }
+                        } else {
+                        ?>
+                            <div id="emptyCart" class="empty-cart">
+                                <div class="empty-cart-icon">
+                                    <i class="fas fa-shopping-cart"></i>
+                                </div>
+                                <h5>Your cart is empty</h5>
+                                <p>Looks like you haven't added anything to your cart yet.</p>
+                                <a href="productpage.php" class="btn btn-primary px-4 py-2">Continue Shopping</a>
+                            </div>
+                        <?php } ?>
+                    </div>
                 </div>
+                
+                <a href="productpage.php" class="continue-shopping">
+                    <i class="fas fa-arrow-left"></i> Continue Shopping
+                </a>
             </div>
 
+            <!-- Order Summary -->
+            <?php
+            $total_amount = 0;
+            $tamt = mysqli_query($conn, sprintf("SELECT * FROM `atcproduct` WHERE `userID` = '%s'", $Userid));
+            $tamt_count = mysqli_num_rows($tamt);
+            if (mysqli_num_rows($tamt) > 0) {
+                while ($tamt_data = mysqli_fetch_assoc($tamt)) {
+                    $total_amount += floatval($tamt_data['productPrice']) * intval($tamt_data['productQuantity']);
+                }
+            } else {
+                $total_amount = 0;
+            }
+            ?>
             <div class="col-lg-4">
-                <div class="summary-card">
-                    <h5 class="mb-4">Order Summary</h5>
+                <div class="summary-card animated" style="animation-delay: 0.4s">
+                    <h5 class="summary-title">Order Summary</h5>
                     
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Subtotal</span>
-                        <span class="fw-bold cart-total">$<?php echo $total; ?></span>
+                    <div class="summary-row">
+                        <span class="summary-label">Subtotal (<span id="itemCount"><?php echo htmlspecialchars($tamt_count, ENT_QUOTES, 'UTF-8'); ?></span> items)</span>
+                        <span class="summary-value subtotal">₹<?php echo htmlspecialchars($total_amount, ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Shipping</span>
-                        <span class="fw-bold">Free</span>
+                    
+                    <div class="summary-row">
+                        <span class="summary-label">Shipping</span>
+                        <span class="summary-value shipping">Free</span>
                     </div>
-                    <hr>
-                    <div class="d-flex justify-content-between mb-4">
-                        <span class="fw-bold">Total</span>
-                        <span class="fw-bold text-primary h5 mb-0 cart-total">$<?php echo $total; ?></span>
+                    
+                    <div class="summary-divider"></div>
+                    
+                    <div class="summary-total">
+                        <span class="summary-total-label">Total</span>
+                        <span class="summary-total-value total">₹<?php echo htmlspecialchars($total_amount, ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
-
-                    <?php if (!empty($cart_data)) { ?>
-                        <!--<div class="mb-3">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Promo Code">
-                                <button type="button" class="btn btn-outline-primary">Apply</button>
-                            </div>
-                        </div>-->
-                        <a href="buynow.php?param=requestATC&total=<?php echo $total; ?>" 
-                            class="btn btn-primary w-100 py-2">
-                            <i class="fas fa-lock me-2"></i>Proceed to Checkout
-                        </a>
+                    <?php if ($tamt_count > 0) { ?>
+                    <a href="buynow.php?param=requestATC" class="checkout-btn">
+                        <i class="fas fa-lock"></i> Proceed to Checkout
+                    </a>
+                    <div class="mt-4">
+                        <div class="d-flex align-items-center justify-content-center gap-2 text-muted">
+                            <i class="fas fa-shield-alt"></i>
+                            <span class="small">Secure Checkout</span>
+                        </div>
+                    </div>
                     <?php } ?>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Footer -->
     <?php footer(); ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-    function updateQty(btn, change) {
-        const form = btn.closest('form');
-        const input = form.querySelector('.quantity-input');
-        const pricePerUnit = parseFloat(input.dataset.price);
-        let value = parseInt(input.value) + change;
-        value = Math.max(1, value);
-        input.value = value;
-        
-        // Update item total
-        const itemTotal = form.closest('.row').querySelector('.item-total');
-        itemTotal.textContent = '$' + (value * pricePerUnit).toFixed(2);
-        
-        // Update cart total
-        updateCartTotal();
-    }
-
-    function updateCartTotal() {
-        let total = 0;
-        document.querySelectorAll('.quantity-input').forEach(input => {
-            const quantity = parseInt(input.value);
-            const price = parseFloat(input.dataset.price);
-            total += quantity * price;
-        });
-        
-        // Update all total displays
-        document.querySelectorAll('.cart-total').forEach(el => {
-            el.textContent = '$' + total.toFixed(2);
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        const summaryTotal = document.querySelector('.text-primary.h5');
-        if (summaryTotal) {
-            summaryTotal.classList.add('cart-total');
+        // Remove item
+        function removeItem(ID) {
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            xhttp.open("GET", "ajaxreq.php?param=removeatc&id=" + ID, true);
+            xhttp.send();
         }
-    });
-	
-	document.addEventListener('DOMContentLoaded', function() {
-		const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-	
-		hiddenInputs.forEach(function(input) {
-			input.addEventListener('change', function() {
-				alert('Hidden input has been altered!');
-			});
-		});
-	});
-
+        
+        // Change quantity
+        function updateQty(id, req) {
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            xhttp.open("GET", "ajaxreq.php?param=qtychange&id=" + id + "&request=" + req, true);
+            xhttp.send();
+        }
     </script>
 </body>
 </html>

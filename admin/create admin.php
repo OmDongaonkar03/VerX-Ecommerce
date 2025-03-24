@@ -1,24 +1,62 @@
 <?php
-	include("admin function.php");
+include("admin function.php");
 
-	if ($_SERVER['REQUEST_METHOD'] == "POST") {
-		$email = $_POST['adminEmail'];
-		$password = $_POST['adminPassword'];
-		$confirmPassword = $_POST['confirmPassword'];
-		$privileges = $_POST['privileges'];
-	
-		$ticks = implode(',', $privileges);
-		
-		$sql= mysqli_query($conn,"INSERT INTO `admin details`(`admin_password`, `admin_email`, `privileges`) VALUES ('$confirmPassword','$email','$ticks')");
-		if($sql){
-			echo "<script>alert('Admin Details Added Successfully')</script>";
-			echo "<script>window.location.href = window.location.href</script>";
-		}else{
-			echo "<script>alert('Failed To Add Admin Details')</script>";
-			echo "<script>window.location.href = window.location.href</script>";
-		}
-	}
+if ($_SERVER['REQUEST_METHOD'] == "POST") {
+    // Sanitize and validate email
+    $email = filter_var($_POST['adminEmail'], FILTER_SANITIZE_EMAIL);
+    if (!preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $email)) {
+        $msg = htmlspecialchars("Invalid email format.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg')</script>";
+        echo "<script>window.location.href = window.location.href</script>";
+        exit;
+    }
 
+    // Validate passwords
+    $password = $_POST['adminPassword'];
+    $confirmPassword = $_POST['confirmPassword'];
+    if (empty($password) || $password !== $confirmPassword) {
+        $msg = htmlspecialchars("Passwords must match and cannot be empty.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg')</script>";
+        echo "<script>window.location.href = window.location.href</script>";
+        exit;
+    }
+
+    // Hash the password
+    $hashedPassword = password_hash($confirmPassword, PASSWORD_DEFAULT);
+
+    // Sanitize and validate privileges
+    if (!isset($_POST['privileges']) || !is_array($_POST['privileges'])) {
+        $msg = htmlspecialchars("At least one privilege must be selected.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg')</script>";
+        echo "<script>window.location.href = window.location.href</script>";
+        exit;
+    }
+    $allowed_privileges = ['read', 'edit', 'notification', 'add_editProduct', 'create_admin', 'all'];
+    $privileges = array_intersect($_POST['privileges'], $allowed_privileges); // Only allow valid privileges
+    $ticks = mysqli_real_escape_string($conn, implode(',', $privileges));
+
+    // Escape email for SQL
+    $email = mysqli_real_escape_string($conn, $email);
+
+    // Use sprintf for safer query construction
+    $query = sprintf(
+        "INSERT INTO `admin details` (`admin_password`, `admin_email`, `privileges`) VALUES ('%s', '%s', '%s')",
+        $hashedPassword,
+        $email,
+        $ticks
+    );
+    $sql = mysqli_query($conn, $query);
+
+    if ($sql) {
+        $msg = htmlspecialchars("Admin Details Added Successfully", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg')</script>";
+        echo "<script>window.location.href = window.location.href</script>";
+    } else {
+        $msg = htmlspecialchars("Failed To Add Admin Details", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg')</script>";
+        echo "<script>window.location.href = window.location.href</script>";
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -154,7 +192,6 @@
             box-shadow: 0 4px 8px rgba(13, 110, 253, 0.25);
         }
 
-        /* Custom styling for privilege checkboxes */
         .privileges-card .form-check {
             padding: 0.75rem;
             border-radius: 8px;
@@ -303,7 +340,7 @@
                         form.classList.add('was-validated')
                     }, false)
                 })
-        });
+        })();
 		document.getElementById('allPrivilege').addEventListener('change', function () {
 			const checkboxes = document.querySelectorAll('input[name="privileges[]"]');
 			checkboxes.forEach(checkbox => {

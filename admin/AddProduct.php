@@ -4,78 +4,169 @@ if (!isset($_SESSION["admin_email"])) {
     header("Location: admin login.php");
     exit();
 }
+
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
+    // Check all required fields
     if (isset($_POST['productName']) && isset($_POST['category']) && isset($_POST['price']) && 
         isset($_POST['discount']) && isset($_POST['description']) && isset($_FILES['productImage']) && 
-        isset($_POST['status']) && isset($_POST['colors'])) {
-        
+        isset($_POST['status']) && isset($_POST['colors']) && isset($_POST['quantity'])) {
+
+        // Generate product ID
         $productID = rand(1000, 100000);
-        $productName = $_POST['productName'];
+
+        // Sanitize and validate product name
+        $productName = filter_var($_POST['productName'], FILTER_SANITIZE_STRING);
+        if (empty($productName)) {
+            $msg = htmlspecialchars("Product name cannot be empty.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+        $productName = mysqli_real_escape_string($conn, $productName);
+
+        // Validate category
+        $allowed_categories = ['men', 'women', 'kids', 'accessories'];
         $category = $_POST['category'];
-        $price = floatval($_POST['price']);
-        $discount = floatval($_POST['discount']);
-        $description = $_POST['description'];
+        if (!in_array($category, $allowed_categories)) {
+            $msg = htmlspecialchars("Invalid category selected.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+        $category = mysqli_real_escape_string($conn, $category);
+
+        // Validate price
+        $price = filter_var($_POST['price'], FILTER_VALIDATE_FLOAT);
+        if ($price === false || $price < 0) {
+            $msg = htmlspecialchars("Price must be a valid positive number.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+
+        // Validate discount
+        $discount = filter_var($_POST['discount'], FILTER_VALIDATE_FLOAT);
+        if ($discount === false || $discount < 0 || $discount > 100) {
+            $msg = htmlspecialchars("Discount must be between 0 and 100.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+
+        // Sanitize description
+        $description = filter_var($_POST['description'], FILTER_SANITIZE_STRING);
+        if (empty($description)) {
+            $msg = htmlspecialchars("Description cannot be empty.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+        $description = mysqli_real_escape_string($conn, $description);
+
+        // Validate status
+        $allowed_statuses = ['active', 'inactive', 'out_of_stock'];
         $status = $_POST['status'];
-        $quantity = intval($_POST['quantity']);
+        if (!in_array($status, $allowed_statuses)) {
+            $msg = htmlspecialchars("Invalid status selected.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+        $status = mysqli_real_escape_string($conn, $status);
 
-        $sanitized_colors = array_map('trim', $_POST['colors']);
-		$colors = implode(',', $sanitized_colors);
+        // Validate quantity
+        $quantity = filter_var($_POST['quantity'], FILTER_VALIDATE_INT);
+        if ($quantity === false || $quantity < 0) {
+            $msg = htmlspecialchars("Quantity must be a valid non-negative integer.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
 
+        // Sanitize and validate colors
+        if (!is_array($_POST['colors']) || empty($_POST['colors'])) {
+            $msg = htmlspecialchars("At least one color must be provided.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+        $sanitized_colors = array_map(function($color) {
+            return mysqli_real_escape_string($GLOBALS['conn'], trim(filter_var($color, FILTER_SANITIZE_STRING)));
+        }, $_POST['colors']);
+        $colors = implode(',', $sanitized_colors);
 
+        // File upload handling
         $uploaddir = '../uploads/';
+
+        // Validate and upload main image
+        $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+        $max_size = 5 * 1024 * 1024; // 5MB
         $uploadfile = $uploaddir . basename($_FILES['productImage']['name']);
+        if ($_FILES['productImage']['size'] > $max_size || !in_array($_FILES['productImage']['type'], $allowed_types)) {
+            $msg = htmlspecialchars("Invalid main image file type or size (max 5MB, JPEG/PNG/GIF only).", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
+            exit;
+        }
+        $uploadfile = mysqli_real_escape_string($conn, $uploadfile);
+
+        // Handle additional images
         $image2 = '';
         $image3 = '';
         $image4 = '';
+        foreach (['productImage2', 'productImage3', 'productImage4'] as $key => $field) {
+            if (isset($_FILES[$field]['name']) && !empty($_FILES[$field]['name'])) {
+                $file = $uploaddir . basename($_FILES[$field]['name']);
+                if ($_FILES[$field]['size'] <= $max_size && in_array($_FILES[$field]['type'], $allowed_types)) {
+                    $file = mysqli_real_escape_string($conn, $file);
+                    if (move_uploaded_file($_FILES[$field]['tmp_name'], $file)) {
+                        ${"image" . ($key + 2)} = $file;
+                    } else {
+                        $msg = htmlspecialchars("Failed to upload additional image " . ($key + 2) . ".", ENT_QUOTES, 'UTF-8');
+                        echo "<script>alert('$msg')</script>";
+                        exit;
+                    }
+                } else {
+                    $msg = htmlspecialchars("Invalid additional image " . ($key + 2) . " file type or size.", ENT_QUOTES, 'UTF-8');
+                    echo "<script>alert('$msg')</script>";
+                    exit;
+                }
+            }
+        }
 
-        // Handle additional images
-        if (isset($_FILES['productImage2']['name']) && !empty($_FILES['productImage2']['name'])) {
-            $image2 = $uploaddir . basename($_FILES['productImage2']['name']);
-            move_uploaded_file($_FILES['productImage2']['tmp_name'], $image2);
-        }
-        if (isset($_FILES['productImage3']['name']) && !empty($_FILES['productImage3']['name'])) {
-            $image3 = mysqli_real_escape_string($conn, $uploaddir . basename($_FILES['productImage3']['name']));
-            move_uploaded_file($_FILES['productImage3']['tmp_name'], $image3);
-        }
-        if (isset($_FILES['productImage4']['name']) && !empty($_FILES['productImage4']['name'])) {
-            $image4 = mysqli_real_escape_string($conn, $uploaddir . basename($_FILES['productImage4']['name']));
-            move_uploaded_file($_FILES['productImage4']['tmp_name'], $image4);
-        }
-
+        // Upload main image and insert into database
         if (move_uploaded_file($_FILES['productImage']['tmp_name'], $uploadfile)) {
-            $sql = mysqli_query($conn, "INSERT INTO `products`(
-                `productID`, `productName`, `category`, `price`, `discount`, 
-                `description`, `product_Image`, `status`, `quantity`, `colors`, 
-                `product_image2`, `product_image3`, `product_image4`
-            ) VALUES (
-                '$productID', '$productName', '$category', $price, $discount,
-                '$description', '$uploadfile', '$status', $quantity, '$colors',
-                '$image2', '$image3', '$image4')"
+            $query = sprintf(
+                "INSERT INTO `products` (
+                    `productID`, `productName`, `category`, `price`, `discount`, 
+                    `description`, `product_Image`, `status`, `quantity`, `colors`, 
+                    `product_image2`, `product_image3`, `product_image4`
+                ) VALUES (
+                    '%d', '%s', '%s', %.2f, %.2f, '%s', '%s', '%s', %d, '%s', '%s', '%s', '%s'
+                )",
+                $productID, $productName, $category, $price, $discount,
+                $description, $uploadfile, $status, $quantity, $colors,
+                $image2, $image3, $image4
             );
+
+            $sql = mysqli_query($conn, $query);
 
             if ($sql) {
                 // Add notification
                 date_default_timezone_set("Asia/Kolkata");
                 $current_time = date("Y/m/d H:i");
-                $productName = mysqli_real_escape_string($conn, $productName);
-                
-                $notification = mysqli_query($conn, "INSERT INTO `notifications`(
-                    `title`, `detail`, `timestamp`
-                ) VALUES (
-                    'New Product Added',
-                    'new product ($productName) has been added in the product page',
-                    '$current_time'
-                )");
+                $notification_query = sprintf(
+                    "INSERT INTO `notifications` (`title`, `detail`, `timestamp`) VALUES ('%s', '%s', '%s')",
+                    mysqli_real_escape_string($conn, "New Product Added"),
+                    mysqli_real_escape_string($conn, "new product ($productName) has been added in the product page"),
+                    mysqli_real_escape_string($conn, $current_time)
+                );
+                mysqli_query($conn, $notification_query);
 
-                echo "<script>alert('Product Added Successfully')</script>";
+                $msg = htmlspecialchars("Product Added Successfully", ENT_QUOTES, 'UTF-8');
+                echo "<script>alert('$msg')</script>";
             } else {
-                echo "<script>alert('Database insertion failed: " . mysqli_error($conn) . "')</script>";
+                $error = htmlspecialchars("Database insertion failed: " . mysqli_error($conn), ENT_QUOTES, 'UTF-8');
+                echo "<script>alert('$error')</script>";
             }
         } else {
-            echo "<script>alert('File upload failed. Check folder permissions.')</script>";
+            $msg = htmlspecialchars("File upload failed. Check folder permissions.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
         }
     } else {
-        echo "<script>alert('All required fields must be filled out.')</script>";
+        $msg = htmlspecialchars("All required fields must be filled out.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg')</script>";
     }
 }
 ?>
@@ -386,22 +477,22 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                                     </div>
                                     <div class="col-md-3">
                                         <div class="mb-3">
-                                            <label class="form-label">Image 2*</label>
-                                            <input type="file" class="form-control" name="productImage2" accept="image/*" onchange="previewImage(this, 'preview2')" required>
+                                            <label class="form-label">Image 2</label>
+                                            <input type="file" class="form-control" name="productImage2" accept="image/*" onchange="previewImage(this, 'preview2')">
                                             <div id="preview2" class="image-preview"></div>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="mb-3">
-                                            <label class="form-label">Image 3*</label>
-                                            <input type="file" class="form-control" name="productImage3" accept="image/*" onchange="previewImage(this, 'preview3')" required>
+                                            <label class="form-label">Image 3</label>
+                                            <input type="file" class="form-control" name="productImage3" accept="image/*" onchange="previewImage(this, 'preview3')">
                                             <div id="preview3" class="image-preview"></div>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="mb-3">
-                                            <label class="form-label">Image 4*</label>
-                                            <input type="file" class="form-control" name="productImage4" accept="image/*" onchange="previewImage(this, 'preview4')" required>
+                                            <label class="form-label">Image 4</label>
+                                            <input type="file" class="form-control" name="productImage4" accept="image/*" onchange="previewImage(this, 'preview4')">
                                             <div id="preview4" class="image-preview"></div>
                                         </div>
                                     </div>

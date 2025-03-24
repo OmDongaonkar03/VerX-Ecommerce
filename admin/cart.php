@@ -5,11 +5,6 @@
 		exit();
 	}
 	$sql = mysqli_query($conn,"SELECT * FROM `atcproduct`");
-	
-	if(isset($_GET['search'])) {
-		$search =$_GET['search'];
-		$sql = mysqli_query($conn, "SELECT * FROM `atcproduct` WHERE `productID` LIKE '%$search%' OR `userID` LIKE '%$search%'");
-	}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,14 +131,9 @@
         </div>
 
 		<div class="mb-4 px-3">
-			<form method="GET">
-				<div class="input-group">
-					<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search">
-					<button class="btn btn-primary" type="submit">
-						<i class="fas fa-search me-2"></i>Search
-					</button>
-				</div>
-			</form>
+			<div class="input-group">
+				<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search" id="searchInput">
+			</div>
 		</div>
 
         <div class="table-container">
@@ -155,7 +145,7 @@
                         <th>User ID</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="display">
                     <?php
                     if (mysqli_num_rows($sql) > 0) {
                         while ($data = mysqli_fetch_assoc($sql)) {
@@ -175,5 +165,22 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+	<script>
+		document.getElementById('searchInput').addEventListener('keyup', search);
+        
+        function search() {
+            let word = document.getElementById("searchInput").value;
+            
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "cart_search";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&input=" + word, true);
+            xhttp.send();
+        }
+	</script>
 </body>
 </html>

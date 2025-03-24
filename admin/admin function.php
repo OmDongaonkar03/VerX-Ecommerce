@@ -23,10 +23,6 @@ function sidebar(){
                     <i class="fas fa-users"></i>
                     User Details
                 </a>
-				<a class="nav-link" href="user tracking.php">
-                    <i class="fas fa-map-marker-alt"></i>
-                    User Tracking
-                </a>
                 <a class="nav-link" href="products.php">
                     <i class="fas fa-box"></i>
                     Products

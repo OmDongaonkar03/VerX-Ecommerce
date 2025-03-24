@@ -1,30 +1,21 @@
 <?php
-	include("admin function.php");
-	$admin_email = $_SESSION["admin_email"];
-	$sql = mysqli_query($conn,"SELECT * FROM `signup` WHERE `Status` = 'Pending'");
-	if (!isset($_SESSION["admin_email"])) {
-		header("Location: admin login.php");
-		exit();
-	}
-	
-	if(isset($_GET['search'])) {
-		$search = $_GET['search'];
-		$sql = mysqli_query($conn, "SELECT * FROM `signup` WHERE `Status` = 'Pending' AND (`name` LIKE '%$search%' OR `email` LIKE '%$search%' OR `id` LIKE '%$search%')");
-	}
-	
-	//requests count
-	$entries = mysqli_query($conn, "SELECT COUNT(*) AS req, date FROM `signup` GROUP BY date");
-	
-	//selct by Date
-	if($_SERVER['REQUEST_METHOD'] == 'POST'){
-		$date = $_POST['date'] ?? '';
-		if($date != ''){
-			$dateParts = explode('-', $date);
-			$formattedDate = $dateParts[2] . '/' . $dateParts[1] . '/' . $dateParts[0];
-			echo "<script>console.log('$formattedDate');</script>";
-			$entries = mysqli_query($conn, "SELECT COUNT(*) AS req, date FROM `signup` WHERE date = '$formattedDate'");
-		}
-	}
+include("admin function.php");
+
+$admin_email = isset($_SESSION["admin_email"]) ? filter_var($_SESSION["admin_email"], FILTER_SANITIZE_EMAIL) : null;
+if (!$admin_email || !preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $admin_email)) {
+    header("Location: admin login.php");
+    exit();
+}
+
+$sql = mysqli_query($conn, "SELECT * FROM `signup` WHERE `Status` = 'Pending'");
+
+$entries = mysqli_query($conn, "SELECT COUNT(*) AS req, date FROM `signup` GROUP BY date");
+
+$safe_admin_email = mysqli_real_escape_string($conn, $admin_email);
+$privileges_query = mysqli_query($conn, sprintf("SELECT privileges FROM `admin details` WHERE `admin_email` = '%s'", $safe_admin_email));
+$privileges_data = mysqli_fetch_assoc($privileges_query);
+$privileges = explode(",", htmlspecialchars($privileges_data['privileges'] ?? '', ENT_QUOTES, 'UTF-8'));
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,40 +127,37 @@
        .table tbody tr:hover {
            background-color: #f8f9fa;
        }
+
+       .chart-container {
+           background: white;
+           border-radius: 12px;
+           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+           padding: 1.5rem;
+           margin-bottom: 2rem;
+           height: 400px;
+       }
    </style>
 </head>
 <body>
     <div class="sidebar" id="sidebar">
-		<?php sidebar() ?>
+        <?php echo htmlspecialchars(sidebar(), ENT_QUOTES, 'UTF-8'); ?>
     </div>
 
     <div class="main-content" id="main">
         <div class="header">
-            <h2 class="m-0"><i class="fa fa-hourglass"></i> Pending Request's</h2>
+            <h2 class="m-0"><i class="fa fa-hourglass"></i> Pending Requests</h2>
         </div>
-		<div class="d-flex gap-4">
-			<form method="POST" class="d-flex gap-3 align-items-center">
-				<!-- date -->
-				<label for="date" class="">Date:</label>
-				<input type="date" name="date" id="date">
-				<button type="submit" class="btn btn-primary">Submit</button>
-			</form>
-		</div>
-		<div class="chart-container">
+        
+        <div class="chart-container">
             <canvas id="myChart"></canvas>
         </div>
-		
-		<div class="mt-4 mb-4 px-3">
-			<form method="GET">
-				<div class="input-group">
-					<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search">
-					<button class="btn btn-primary" type="submit">
-						<i class="fas fa-search me-2"></i>Search
-					</button>
-				</div>
-			</form>
-		</div>
-		
+        
+        <div class="mt-4 mb-4 px-3">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search" id="searchInput">
+            </div>
+        </div>
+        
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -179,109 +167,143 @@
                         <th>Contact</th>
                         <th>Email</th>
                         <th>Password</th>
-						<th>Date</th>
-						<?php 
-						$privileges_query = mysqli_query($conn, "SELECT privileges FROM `admin details` WHERE `admin_email` = '$admin_email'");
-						$privileges_data = mysqli_fetch_assoc($privileges_query);
-						$privileges = explode(",", $privileges_data['privileges']);
-						if (in_array('edit', $privileges)) { ?>
-							<th>Action</th>
-						<?php } ?>
+                        <th>Date</th>
+                        <?php if (in_array('edit', $privileges)) { ?>
+                            <th>Action</th>
+                        <?php } ?>
                     </tr>
                 </thead>
-                <tbody>
-					<?php
-					if (mysqli_num_rows($sql) > 0) {
-						while ($data = mysqli_fetch_assoc($sql)) {
-							$id = $data['id'];
-					?>
-						<tr>
-							<td><?php echo $data['id']; ?></td>
-							<td><?php echo $data['name']; ?></td>
-							<td><?php echo $data['contact']; ?></td>
-							<td><?php echo $data['email']; ?></td>
-							<td><?php echo $data['password']; ?></td>
-							<td><?php echo $data['date']; ?></td>
-							<?php if (in_array('edit', $privileges)) { ?>
-								<td class="d-flex gap-1">
-									<form method="POST">
-										<input type="hidden" name="id" value="<?php echo $id; ?>">
-										<button type="submit" class="btn btn-primary mt-2" name="accept">Accept</button>
-
-										<input type="hidden" name="id" value="<?php echo $id; ?>">
-										<button type="submit" class="btn btn-danger mt-2" name="reject">Reject</button>
-									</form>
-								</td>
-							<?php } ?>
-						</tr>
-					<?php
-						}
-					}
-				
-					if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['accept'])) {
-						$id = $_POST['id'];
-						$accept = mysqli_query($conn, "UPDATE `signup` SET `Status`='Accepted' WHERE `id` = '$id'");
-						if ($accept) {
-							echo "<script>alert('Status updated successfully!');</script>";
-							echo "<script>window.location.href = window.location.href;</script>";
-						} else {
-							echo "<script>alert('Error updating status.');</script>";
-						}
-					}
-					if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['reject'])) {
-						$id = $_POST['id'];
-						$reject = mysqli_query($conn, "DELETE FROM `signup` WHERE `id` = '$id'");
-						if ($reject) {
-							echo "<script>alert('Rejected successfully!');</script>";
-							echo "<script>window.location.href = window.location.href;</script>";
-						} else {
-							echo "<script>alert('Error while rejecting.');</script>";
-						}
-					}
-					?>
-				</tbody>
+                <tbody id="display">
+                    <?php
+                    if (mysqli_num_rows($sql) > 0) {
+                        while ($data = mysqli_fetch_assoc($sql)) {
+                            $id = htmlspecialchars($data['id'], ENT_QUOTES, 'UTF-8');
+                            $name = htmlspecialchars($data['name'], ENT_QUOTES, 'UTF-8');
+                            $contact = htmlspecialchars($data['contact'], ENT_QUOTES, 'UTF-8');
+                            $email = htmlspecialchars($data['email'], ENT_QUOTES, 'UTF-8');
+                            $password = htmlspecialchars($data['password'], ENT_QUOTES, 'UTF-8');
+                            $date = htmlspecialchars($data['date'], ENT_QUOTES, 'UTF-8');
+                    ?>
+                        <tr>
+                            <td><?php echo $id; ?></td>
+                            <td><?php echo $name; ?></td>
+                            <td><?php echo $contact; ?></td>
+                            <td><?php echo $email; ?></td>
+                            <td><?php echo $password; ?></td>
+                            <td><?php echo $date; ?></td>
+                            <?php if (in_array('edit', $privileges)) { ?>
+                                <td class="d-flex gap-1">
+                                    <button type="button" class="btn btn-success mt-2" onclick="action('<?php echo urlencode($id); ?>', 'accept')">Accept</button>
+                                    <button type="button" class="btn btn-danger mt-2" onclick="action('<?php echo urlencode($id); ?>', 'reject')">Reject</button>
+                                </td>
+                            <?php } ?>
+                        </tr>
+                    <?php
+                        }
+                    } else {
+                        echo "<tr><td colspan=\"" . (in_array('edit', $privileges) ? 7 : 6) . "\">No pending requests found.</td></tr>";
+                    }
+                    ?>
+                </tbody>
             </table>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	<script>
-		<?php 
-			if (mysqli_num_rows($entries) > 0) {
-				$dateArr = array();
-				$dateCount = array();
-				
-				while ($dateData = mysqli_fetch_assoc($entries)) {
-					$dateArr[] = $dateData['date'];
-					$dateCount[] = $dateData['req'];
-				}
-			}
-		?>
-		// Initialize chart with your sales data
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', search);
+        
+        function search() {
+            let word = encodeURIComponent(document.getElementById("searchInput").value);
+            
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "request_search";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&input=" + word, true);
+            xhttp.send();
+        }
+        
+        function action(id, action) {
+            let safeId = encodeURIComponent(id);
+            let safeAction = encodeURIComponent(action);
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "user_action";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&action=" + safeAction + "&user=" + safeId, true);
+            xhttp.send();
+        }
+    </script>
+    
+    <script>
+        <?php 
+        if (mysqli_num_rows($entries) > 0) {
+            $dateArr = [];
+            $dateCount = [];
+            
+            while ($dateData = mysqli_fetch_assoc($entries)) {
+                $dateArr[] = htmlspecialchars($dateData['date'], ENT_QUOTES, 'UTF-8');
+                $dateCount[] = (int)$dateData['req'];
+            }
+            
+            array_multisort(array_map('strtotime', $dateArr), SORT_ASC, $dateArr, $dateCount);
+        } else {
+            $dateArr = [];
+            $dateCount = [];
+        }
+        ?>
+        
+        // Initialize chart with request data
         const ctx = document.getElementById('myChart').getContext('2d');
-		new Chart(ctx, {
-			type: 'bar',
-			data: {
-				labels: <?php echo json_encode($dateArr); ?>,
-				datasets: [{
-					label: 'Request Data',
-					data: <?php echo json_encode($dateCount); ?>,
-					backgroundColor: 'rgba(82, 110, 253, 0.5)',
-					borderColor: 'rgba(13, 110, 253, 1)',
-					borderWidth: 1
-				}]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				scales: {
-					y: {
-						beginAtZero: true
-					}
-				}
-			}
-		});
-	</script>
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: <?php echo json_encode($dateArr); ?>,
+                datasets: [{
+                    label: 'Request Data',
+                    data: <?php echo json_encode($dateCount); ?>,
+                    backgroundColor: 'rgba(82, 110, 253, 0.2)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3 
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Requests'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>

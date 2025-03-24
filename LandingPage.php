@@ -1,24 +1,5 @@
 <?php
 include('config.php');
-$userIP = $_SERVER['REMOTE_ADDR'];
-$current_page_url = $_SERVER['REQUEST_URI'];
-$string=exec('getmac');
-$mac=substr($string, 0, 17); 
-
-$identification = mysqli_query($conn, "SELECT `UserID` FROM `interaction` WHERE `MAC addr` = '$mac'");
-	
-if(isset($_COOKIE['latitude']) && isset($_COOKIE['longitude'])) {
-    $latitude = $_COOKIE['latitude'];
-    $longitude = $_COOKIE['longitude'];
-    
-    $check_sql = mysqli_query($conn,"SELECT count FROM `interaction` WHERE `MAC addr` = '$mac' AND `pages visited` = '$current_page_url' LIMIT 1");
-    
-	if(mysqli_num_rows($check_sql) > 0) {
-		$update_sql = mysqli_query($conn,"UPDATE `interaction` SET count = count + 1 WHERE `MAC addr`  = '$mac' AND `pages visited` = '$current_page_url'");
-	}else {
-			$insert_sql = mysqli_query($conn,"INSERT INTO `interaction`(`MAC addr`, `IP`, `latitude`, `longitude`, `pages visited`, `count`) VALUES ('$mac','$userIP','$latitude','$longitude','$current_page_url',1)");
-	}
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -95,33 +76,6 @@ if(isset($_COOKIE['latitude']) && isset($_COOKIE['longitude'])) {
             </div>
         </div>
     </nav>
-	
-	<!-- Welcome pop up-->
-	<?php 
-		if (mysqli_num_rows($identification) > 0) { 
-		$identity_data = mysqli_fetch_assoc($identification);
-		$userid = $identity_data['UserID'];
-		
-		if ($userid != '') {
-			$identity_check = mysqli_query($conn, "SELECT * FROM `signup` WHERE `id` = '$userid'");
-			if ($identity_check && mysqli_num_rows($identity_check) > 0) {
-			$identity_check_data = mysqli_fetch_assoc($identity_check);
-			$user_name = $identity_check_data['name'];
-	?>
-		<div class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-			<div class="toast-header">
-				<strong class="me-auto">VerX</strong>
-				<button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-			</div>
-			<div class="toast-body">
-				Welcome to VerX <?php echo $user_name; ?>
-			</div>
-		</div>
-	<?php
-			}
-		}
-	}
-	?>
 
     <!-- Hero Section -->
     <section class="hero-section">

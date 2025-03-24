@@ -1,7 +1,4 @@
-<?php include ('admin function.php');
-
-	$sql = mysqli_query($conn,"SELECT * FROM `products`");
-?>
+<?php include_once('admin function.php') ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,6 +20,8 @@
             background-color: var(--secondary-color);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
 
         /* Sidebar Styles */
@@ -33,7 +32,7 @@
             position: fixed;
             left: 0;
             top: 0;
-            padding: 1.5rem;
+            padding: 1.5rem 1rem;
             z-index: 1000;
             transition: all 0.3s;
             box-shadow: 4px 0 10px rgba(0,0,0,0.1);
@@ -51,7 +50,7 @@
         .nav-link {
             color: #fff !important;
             padding: 0.5rem;
-            margin: 0 0 6px 0;
+			margin: 0 0 6px 0;
             border-radius: 8px;
             transition: all 0.3s;
             display: flex;
@@ -106,13 +105,14 @@
             border-radius: 15px;
             border: none;
             background: white;
-            margin: 20px 0 0 140px;
+            margin-bottom: 2rem;
         }
 
         .card-header {
             border-radius: 15px 15px 0 0 !important;
             padding: 1.5rem;
             background: var(--primary-color);
+            color: white;
         }
 
         .form-control, .form-select {
@@ -128,11 +128,11 @@
         }
 
         .image-preview {
-            width: 180px;
+            width: 100%;
             height: 180px;
             border: 2px dashed #e0e0e0;
             border-radius: 12px;
-            margin: 10px auto;
+            margin: 10px 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -143,12 +143,13 @@
 
         .image-preview:hover {
             border-color: var(--primary-light);
-            transform: translateY(-5px);
+            transform: translateY(-3px);
         }
 
         .btn-primary {
+            background-color: var(--primary-color);
             border: none;
-            padding: 0.8rem 2rem;
+            padding: 0.7rem 1.5rem;
             border-radius: 8px;
             transition: all 0.3s;
         }
@@ -162,7 +163,7 @@
             background-color: #e0e0e0;
             border: none;
             color: #333;
-            padding: 0.8rem 2rem;
+            padding: 0.7rem 1.5rem;
             border-radius: 8px;
             transition: all 0.3s;
         }
@@ -185,6 +186,11 @@
             border-radius: 15px;
             overflow: hidden;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .table {
+            margin-bottom: 0;
         }
 
         .table th {
@@ -192,6 +198,7 @@
             color: white;
             font-weight: 500;
             border: none;
+            padding: 1rem;
         }
 
         .table td {
@@ -200,8 +207,8 @@
         }
 
         .badge {
-            padding: 0.7rem 1.2rem;
-            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
             border-radius: 20px;
         }
 
@@ -235,7 +242,24 @@
             background: #f8f9fa;
             padding: 1rem;
             border-radius: 8px;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+        }
+
+        .product-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #eee;
         }
 
         .pagination {
@@ -254,6 +278,32 @@
             color: white;
         }
 
+        .section-title {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+
+        .add-color-btn, .remove-color-btn {
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+        }
+
+        .remove-color-btn {
+            color: #dc3545;
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                width: 200px;
+            }
+            .main-content {
+                margin-left: 200px;
+                width: calc(100% - 200px);
+            }
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 width: 60px;
@@ -266,83 +316,102 @@
                 margin-left: 60px;
                 width: calc(100% - 60px);
             }
-            .admin-card {
-                margin: 20px 0;
+            .action-buttons {
+                flex-direction: column;
             }
         }
     </style>
 </head>
 <body>
     <div class="sidebar" id="sidebar">
-        <?php sidebar() ?>
+        <?php echo sidebar();?>
     </div>
 
     <div class="main-content" id="main-content">
         <div class="container-fluid py-4">
-            <div class="row justify-content-center">
-                <div class="col-lg-10">
-                    <!-- Search Section -->
-                    <div class="search-container">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <input type="text" class="form-control" placeholder="Search by product name...">
-                            </div>
-                            <div class="col-md-4">
-                                <select class="form-select">
-                                    <option value="">All Categories</option>
-                                    <option value="men">Men's Clothing</option>
-                                    <option value="women">Women's Clothing</option>
-                                    <option value="kids">Kids Clothing</option>
-                                    <option value="accessories">Accessories</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-primary w-100">
-                                    <i class="fas fa-search me-2"></i>Search
-                                </button>
-                            </div>
+            <h2 class="section-title mb-4">Manage Products</h2>
+            
+            <!-- Search Section -->
+            <div class="search-container">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" placeholder="Search by product name...">
                         </div>
                     </div>
-					<?php if(mysqli_num_rows($sql) > 0){
-							while($data = mysqli_fetch_assoc($sql)){
-					?>
-                    <div class="product-table mt-5">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Image</th>
-                                    <th>Product Name</th>
-                                    <th>Category</th>
-                                    <th>Price</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><img src="/api/placeholder/50/50" class="rounded" alt="Product"></td>
-                                    <td><?php echo $data['productName'] ;?></td>
-                                    <td><?php echo $data['category'] ;?></td>
-                                    <td><?php echo $data['price'] ;?></td>
-                                    <td><span class="badge bg-success"><?php echo $data['status'] ;?></span></td>
-                                    <td>
-                                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal">
-                                            <i class="fas fa-edit"></i> Edit
-                                        </button>
-                                        <button class="btn btn-sm btn-danger">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="col-md-4">
+                        <select class="form-select">
+                            <option value="">All Categories</option>
+                            <option value="men">Men's Clothing</option>
+                            <option value="women">Women's Clothing</option>
+                            <option value="kids">Kids Clothing</option>
+                            <option value="accessories">Accessories</option>
+                        </select>
                     </div>
-					<?php
-							}
-						}
-					?>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100">
+                            Search
+                        </button>
+                    </div>
                 </div>
             </div>
+            
+            <!-- Products Table -->
+            <div class="product-table">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">Image</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th style="width: 150px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Sample row - actual data will be populated by PHP -->
+                        <tr>
+                            <td><img src="/api/placeholder/60/60" class="product-image" alt="Product"></td>
+                            <td>Sample Product Name</td>
+                            <td>Men's Clothing</td>
+                            <td>$99.99</td>
+                            <td><span class="badge bg-success">Active</span></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal">
+                                        <i class="fas fa-edit me-1"></i> Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-danger">
+                                        <i class="fas fa-trash me-1"></i> Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- End sample row -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <nav aria-label="Page navigation">
+                <ul class="pagination">
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item">
+                        <a class="page-link" href="#" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
         </div>
     </div>
 
@@ -351,7 +420,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Product</h5>
+                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Product</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -360,6 +429,7 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Product Name</label>
                                 <input type="text" class="form-control" value="Sample Product" required>
+                                <div class="invalid-feedback">Please enter a product name.</div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Category</label>
@@ -369,21 +439,23 @@
                                     <option value="kids">Kids Clothing</option>
                                     <option value="accessories">Accessories</option>
                                 </select>
+                                <div class="invalid-feedback">Please select a category.</div>
                             </div>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Price</label>
+                                <label class="form-label">Price ($)</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" value="99.99" required>
+                                    <input type="number" step="0.01" class="form-control" value="99.99" required>
+                                    <div class="invalid-feedback">Please enter a valid price.</div>
                                 </div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Discount</label>
+                                <label class="form-label">Discount (%)</label>
                                 <div class="input-group">
-                                    <input type="number" class="form-control" value="0">
+                                    <input type="number" min="0" max="100" class="form-control" value="0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
@@ -392,14 +464,16 @@
                         <div class="mb-3">
                             <label class="form-label">Description</label>
                             <textarea class="form-control" rows="4" required>Sample product description</textarea>
+                            <div class="invalid-feedback">Please enter a product description.</div>
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label class="form-label">Colors</label>
                             <div id="colorInputsContainer">
                                 <div class="color-input-container d-flex align-items-center gap-2">
                                     <input type="text" class="form-control" name="colors[]" value="Red" required>
                                     <i class="fas fa-plus-circle add-color-btn" onclick="addColorInput()"></i>
+                                    <div class="invalid-feedback">Please enter a color name.</div>
                                 </div>
                             </div>
                         </div>
@@ -412,30 +486,32 @@
                                     <option value="inactive">Inactive</option>
                                     <option value="out_of_stock">Out of Stock</option>
                                 </select>
+                                <div class="invalid-feedback">Please select a status.</div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Quantity</label>
-                                <input type="number" class="form-control" value="100" required>
+                                <input type="number" min="0" class="form-control" value="100" required>
+                                <div class="invalid-feedback">Please enter a valid quantity.</div>
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">Update Images</label>
+                            <label class="form-label mb-2">Product Images</label>
                             <div class="row">
-                                <div class="col-md-3">
-                                    <input type="file" class="form-control" accept="image/*" onchange="previewImage(this, 'preview1')">
+                                <div class="col-md-6 col-lg-3 mb-3">
+                                    <input type="file" class="form-control mb-2" accept="image/*" onchange="previewImage(this, 'preview1')">
                                     <div class="image-preview" id="preview1" style="background-image: url('/api/placeholder/180/180')"></div>
                                 </div>
-                                <div class="col-md-3">
-                                    <input type="file" class="form-control" accept="image/*" onchange="previewImage(this, 'preview2')">
+                                <div class="col-md-6 col-lg-3 mb-3">
+                                    <input type="file" class="form-control mb-2" accept="image/*" onchange="previewImage(this, 'preview2')">
                                     <div class="image-preview" id="preview2" style="background-image: url('/api/placeholder/180/180')"></div>
                                 </div>
-                                <div class="col-md-3">
-                                    <input type="file" class="form-control" accept="image/*" onchange="previewImage(this, 'preview3')">
+                                <div class="col-md-6 col-lg-3 mb-3">
+                                    <input type="file" class="form-control mb-2" accept="image/*" onchange="previewImage(this, 'preview3')">
                                     <div class="image-preview" id="preview3" style="background-image: url('/api/placeholder/180/180')"></div>
                                 </div>
-                                <div class="col-md-3">
-                                    <input type="file" class="form-control" accept="image/*" onchange="previewImage(this, 'preview4')">
+                                <div class="col-md-6 col-lg-3 mb-3">
+                                    <input type="file" class="form-control mb-2" accept="image/*" onchange="previewImage(this, 'preview4')">
                                     <div class="image-preview" id="preview4" style="background-image: url('/api/placeholder/180/180')"></div>
                                 </div>
                             </div>
@@ -443,8 +519,12 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" form="editProductForm" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancel
+                    </button>
+                    <button type="submit" form="editProductForm" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Changes
+                    </button>
                 </div>
             </div>
         </div>
@@ -484,10 +564,11 @@
         function addColorInput() {
             const container = document.getElementById('colorInputsContainer');
             const newInput = document.createElement('div');
-            newInput.className = 'color-input-container d-flex align-items-center gap-2 mt-2';
+            newInput.className = 'color-input-container d-flex align-items-center gap-2';
             newInput.innerHTML = `
                 <input type="text" class="form-control" name="colors[]" placeholder="Enter color name" required>
                 <i class="fas fa-minus-circle remove-color-btn" onclick="removeColorInput(this)"></i>
+                <div class="invalid-feedback">Please enter a color name.</div>
             `;
             container.appendChild(newInput);
         }
@@ -495,6 +576,35 @@
         function removeColorInput(element) {
             element.parentElement.remove();
         }
+
+        // Toggle sidebar functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('main-content');
+            
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    sidebar.classList.toggle('collapsed');
+                    mainContent.classList.toggle('expanded');
+                });
+            }
+            
+            // Auto-collapse sidebar on small screens
+            function checkWidth() {
+                if (window.innerWidth < 768) {
+                    sidebar.classList.add('collapsed');
+                    mainContent.classList.add('expanded');
+                } else {
+                    sidebar.classList.remove('collapsed');
+                    mainContent.classList.remove('expanded');
+                }
+            }
+            
+            // Run on load and resize
+            checkWidth();
+            window.addEventListener('resize', checkWidth);
+        });
     </script>
 </body>
 </html>

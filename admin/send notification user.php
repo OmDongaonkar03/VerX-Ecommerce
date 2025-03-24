@@ -1,29 +1,70 @@
 <?php
-	include("admin function.php");
-	
-	$group_query = mysqli_query($conn,"SELECT * FROM `user_notification` GROUP BY `time`");
-	$group_num = mysqli_num_rows($group_query);
-	
-	$user_query = mysqli_query($conn,"SELECT `id` FROM `signup`");
-	$user_num = mysqli_num_rows($user_query);
-	
-	if($_SERVER['REQUEST_METHOD'] == 'POST'){
-		$title = $_POST['title'];
-		$detail = $_POST['detail'];
-		$link = $_POST['link'];
-		
-		date_default_timezone_set("Asia/Kolkata");
-        $current_time = date("Y/m/d H:i");
-		
-		$sql = mysqli_query($conn,"INSERT INTO `user_notification`(`notification_title`, `notification_detail`, `notification_link`, `timestamp`) VALUES ('$title','$detail','$link','$current_time')");
-		if($sql){
-			echo "<script>alert('Notification Sent Successfully')</script>";
-			echo "<script>window.location.href = window.location.href</script>";
-		}else{
-			echo "<script>alert('Failed To Send Notification')</script>";
-			echo "<script>window.location.href = window.location.href</script>";
-		}
-	}
+include("admin function.php");
+
+// Assuming admin authentication is required
+if (!isset($_SESSION["admin_email"])) {
+    header("Location: admin login.php");
+    exit();
+}
+
+// Fetch stats
+$group_query = mysqli_query($conn, "SELECT * FROM `user_notification` GROUP BY `time`");
+$group_num = mysqli_num_rows($group_query);
+
+$user_query = mysqli_query($conn, "SELECT `id` FROM `signup`");
+$user_num = mysqli_num_rows($user_query);
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Sanitize and validate title
+    $title = filter_var($_POST['title'], FILTER_SANITIZE_STRING);
+    if (empty($title)) {
+        $msg = htmlspecialchars("Notification title cannot be empty.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg'); window.location.href = window.location.href;</script>";
+        exit;
+    }
+    $title = mysqli_real_escape_string($conn, $title);
+
+    // Sanitize and validate detail
+    $detail = filter_var($_POST['detail'], FILTER_SANITIZE_STRING);
+    if (empty($detail)) {
+        $msg = htmlspecialchars("Notification detail cannot be empty.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg'); window.location.href = window.location.href;</script>";
+        exit;
+    }
+    $detail = mysqli_real_escape_string($conn, $detail);
+
+    // Sanitize and validate link
+    $link = filter_var($_POST['link'], FILTER_SANITIZE_URL);
+    if (!preg_match("/^https?:\/\/[a-zA-Z0-9-._~:\/?#[\]@!$&'()*+,;=]+$/", $link)) {
+        $msg = htmlspecialchars("Invalid URL format.", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg'); window.location.href = window.location.href;</script>";
+        exit;
+    }
+    $link = mysqli_real_escape_string($conn, $link);
+
+    // Set timestamp
+    date_default_timezone_set("Asia/Kolkata");
+    $current_time = date("Y/m/d H:i");
+    $current_time = mysqli_real_escape_string($conn, $current_time);
+
+    // Insert notification using sprintf
+    $query = sprintf(
+        "INSERT INTO `user_notification` (`notification_title`, `notification_detail`, `notification_link`, `timestamp`) VALUES ('%s', '%s', '%s', '%s')",
+        $title,
+        $detail,
+        $link,
+        $current_time
+    );
+    $sql = mysqli_query($conn, $query);
+
+    if ($sql) {
+        $msg = htmlspecialchars("Notification Sent Successfully", ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$msg'); window.location.href = window.location.href;</script>";
+    } else {
+        $error = htmlspecialchars("Failed To Send Notification: " . mysqli_error($conn), ENT_QUOTES, 'UTF-8');
+        echo "<script>alert('$error'); window.location.href = window.location.href;</script>";
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -193,7 +234,7 @@
                                     <i class="fas fa-bell fa-lg"></i>
                                 </div>
                                 <h5 class="fw-bold">Today's Notifications</h5>
-                                <h2 class="mb-0 fw-bold"><?php echo $group_num; ?></h2>
+                                <h2 class="mb-0 fw-bold"><?php echo htmlspecialchars($group_num, ENT_QUOTES, 'UTF-8'); ?></h2>
                                 <p class="mt-2 mb-0 opacity-75">Total notifications sent</p>
                             </div>
                         </div>
@@ -205,7 +246,7 @@
                                     <i class="fas fa-users fa-lg"></i>
                                 </div>
                                 <h5 class="fw-bold">Active Users</h5>
-                                <h2 class="mb-0 fw-bold"><?php echo $user_num; ?></h2>
+                                <h2 class="mb-0 fw-bold"><?php echo htmlspecialchars($user_num, ENT_QUOTES, 'UTF-8'); ?></h2>
                                 <p class="mt-2 mb-0 opacity-75">Currently active users</p>
                             </div>
                         </div>
@@ -290,7 +331,7 @@
                                     </button>
                                     <button type="button" 
                                             class="template-btn btn btn-outline-secondary" 
-                                            onclick="fillTemplate('Special Offer', 'Don't miss out on our limited time special offers!', 'https://example.com/offers')">
+                                            onclick="fillTemplate('Special Offer', 'Don\'t miss out on our limited time special offers!', 'https://example.com/offers')">
                                         <i class="fas fa-percentage me-2"></i>Special Offer
                                     </button>
                                     <button type="button" 
@@ -338,7 +379,6 @@
         const previewDetail = document.getElementById('previewDetail');
         const previewLink = document.getElementById('previewLink');
 
-        
         function updatePreview() {
             previewTitle.textContent = titleInput.value || 'Your notification title will appear here';
             previewDetail.textContent = detailInput.value || 'Your notification details will appear here';
@@ -348,7 +388,7 @@
         titleInput.addEventListener('input', updatePreview);
         detailInput.addEventListener('input', updatePreview);
         linkInput.addEventListener('input', updatePreview);
-        
+
         form.addEventListener('submit', function(event) {
             event.preventDefault();
             event.stopPropagation();

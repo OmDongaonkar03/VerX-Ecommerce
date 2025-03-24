@@ -1,24 +1,5 @@
 <?php
 	include_once('function.php');
-	$userIP = $_SERVER['REMOTE_ADDR'];
-	$current_page_url = $_SERVER['REQUEST_URI'];
-	$string=exec('getmac');
-	$mac=substr($string, 0, 17);
-	
-	
-	if(isset($_COOKIE['latitude']) && isset($_COOKIE['longitude'])) {
-		$latitude = $_COOKIE['latitude'];
-		$longitude = $_COOKIE['longitude'];
-		
-		$check_sql = mysqli_query($conn,"SELECT count FROM interaction WHERE `MAC addr` = '$mac' AND `pages visited` = '$current_page_url' LIMIT 1");
-		
-		if(mysqli_num_rows($check_sql) > 0) {
-			$update_sql = mysqli_query($conn,"UPDATE interaction SET count = count + 1 WHERE `MAC addr` = '$mac' AND `pages visited` = '$current_page_url'");
-		}else {
-			$insert_sql = mysqli_query($conn,"INSERT INTO `interaction`(`MAC addr`, `IP`, `latitude`, `longitude`, `pages visited`, `count`) 
-			VALUES ('$mac', '$userIP','$latitude', '$longitude', '$current_page_url', 1)");
-		}
-	}
 ?>
 <!DOCTYPE HTML>
 <html lang="en">
@@ -97,7 +78,7 @@
         <div class="about-card shadow-lg">
             <div class="row g-0">
                 <div class="col-md-6">
-                    <img src="images/shirt img.jpeg" class="about-image" alt="X Clothing Story">
+                    <img src="images\aboutus img.jpeg" class="about-image" alt="X Clothing Story">
                 </div>
                 <div class="col-md-6 p-5 d-flex align-items-center">
                     <div>

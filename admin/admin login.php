@@ -1,29 +1,50 @@
 <?php
 include("../config.php");
 session_start();
+
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
     if (isset($_POST['email']) && isset($_POST['password'])) {
-        $adminEmail = $_POST['email'];
+        // Sanitize and validate email
+        $adminEmail = filter_var($_POST['email'], FILTER_SANITIZE_EMAIL);
+        if (!preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $adminEmail)) {
+            echo "<script>alert('Invalid email format.')</script>";
+            exit;
+        }
+        
+        // Sanitize password (no specific filter, just escape for SQL)
         $adminPassword = $_POST['password'];
-        
-        $sql = mysqli_query($conn, "SELECT * FROM `admin details` WHERE `admin_email` = '$adminEmail' AND `admin_password` = '$adminPassword'");
-        
+        if (empty($adminPassword)) {
+            echo "<script>alert('Password cannot be empty.')</script>";
+            exit;
+        }
+
+        // Escape inputs for SQL injection prevention
+        $adminEmail = mysqli_real_escape_string($conn, $adminEmail);
+        $adminPassword = mysqli_real_escape_string($conn, $adminPassword);
+
+        // Use sprintf for safer query construction
+        $query = sprintf("SELECT * FROM `admin details` WHERE `admin_email` = '%s'", $adminEmail);
+        $sql = mysqli_query($conn, $query);
+
         if (mysqli_num_rows($sql) > 0) {
             $data = mysqli_fetch_assoc($sql);
-            $db_data = $data['admin_email'];  
-            $db_pass = $data['admin_password'];  
-            
-            if ($adminEmail == $db_data && $adminPassword == $db_pass) {
+            $db_data = $data['admin_email'];
+            $db_pass = $data['admin_password'];
+
+            // Verify password (assuming passwords in DB are hashed with password_hash)
+            if ($adminEmail === $db_data && $adminPassword == $db_pass) {
                 $_SESSION["admin_email"] = $adminEmail;
-                
-                header("Location:admin panel.php");
+                header("Location: admin panel.php");
                 exit;
             } else {
-                echo "<script>alert('Invalid details, please retry.')</script>";
+                // Sanitize output to prevent XSS in alert
+                $msg = htmlspecialchars("Invalid details, please retry.", ENT_QUOTES, 'UTF-8');
+                echo "<script>alert('$msg')</script>";
             }
         } else {
-            // If no matching row is found, alert the user
-            echo "<script>alert('Admin email not found.')</script>";
+            // Sanitize output to prevent XSS in alert
+            $msg = htmlspecialchars("Admin email not found.", ENT_QUOTES, 'UTF-8');
+            echo "<script>alert('$msg')</script>";
         }
     }
 }

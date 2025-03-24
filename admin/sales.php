@@ -1,16 +1,15 @@
 <?php 
-	include("admin function.php");
-	
-	if (!isset($_SESSION["admin_email"])) {
-		header("Location: admin login.php");
-		exit();
-	}
-	
-	$sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',orderDate FROM `ordered products` GROUP BY orderDate");
-	
-	$saleMonth = mysqli_query($conn, "SELECT COUNT(*) AS orderCount, orderMonth FROM `ordered products` GROUP BY orderMonth");
-	
-?>
+include("admin function.php");
+
+$admin_email = isset($_SESSION["admin_email"]) ? filter_var($_SESSION["admin_email"], FILTER_SANITIZE_EMAIL) : null;
+if (!$admin_email || !preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $admin_email)) {
+    header("Location: admin login.php");
+    exit();
+}
+
+$sql = mysqli_query($conn, "SELECT COUNT(*) AS 'COUNT', orderDate FROM `ordered products` GROUP BY orderDate");
+
+$saleMonth = mysqli_query($conn, "SELECT COUNT(*) AS orderCount, orderMonth FROM `ordered products` GROUP BY orderMonth");
 
 ?>
 <!DOCTYPE html>
@@ -49,7 +48,7 @@
         .nav-link {
             color: #fff !important;
             padding: 0.5rem;
-			margin:0 0 6px 0;
+            margin:0 0 6px 0;
             border-radius: 8px;
             transition: all 0.3s;
             display: flex;
@@ -191,7 +190,7 @@
 </head>
 <body>
     <div class="sidebar">
-        <?php sidebar() ?>
+        <?php echo htmlspecialchars(sidebar(), ENT_QUOTES, 'UTF-8'); ?>
     </div>
 
     <div class="main-content">
@@ -205,17 +204,17 @@
         </div>
 
         <?php
-        if(mysqli_num_rows($sql) > 0){
-            while($data = mysqli_fetch_assoc($sql)){
-                $order_date = $data['orderDate'];
-                $products_sql = mysqli_query($conn, "SELECT * FROM `ordered products` WHERE orderDate='$order_date' AND `Status` = 'Completed'");
+        if (mysqli_num_rows($sql) > 0) {
+            while ($data = mysqli_fetch_assoc($sql)) {
+                $order_date = mysqli_real_escape_string($conn, $data['orderDate']);
+                $products_sql = mysqli_query($conn, sprintf("SELECT * FROM `ordered products` WHERE orderDate='%s' AND `Status` = 'Completed'", $order_date));
                 $total_num_prod = mysqli_num_rows($products_sql);
                 
                 $products = [];
                 $total_amount = 0;
-                while($row = mysqli_fetch_assoc($products_sql)) {
+                while ($row = mysqli_fetch_assoc($products_sql)) {
                     $products[] = $row;
-                    $total_amount += $row['productPrice'];
+                    $total_amount += floatval($row['price']);
                 }
         ?>
         <div class="table-container">
@@ -223,19 +222,19 @@
                 <thead>
                     <tr>
                         <th>Date</th>
-                        <th>Order's Placed</th>
+                        <th>Orders Placed</th>
                         <th>Amount Collected</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><?php echo $data['orderDate'];?></td>
-                        <td><?php echo $total_num_prod;?></td>
-                        <td>$ <?php echo number_format($total_amount, 2);?></td>
+                        <td><?php echo htmlspecialchars($data['orderDate'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($total_num_prod, ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td>$<?php echo number_format($total_amount, 2); ?></td>
                         <td>
                             <button class="btn btn-primary" type="button" data-bs-toggle="collapse" 
-                                    data-bs-target="#collapse-<?php echo strtolower(str_replace(' ', '-', $data['orderDate'])); ?>" 
+                                    data-bs-target="#collapse-<?php echo htmlspecialchars(strtolower(str_replace(' ', '-', $data['orderDate'])), ENT_QUOTES, 'UTF-8'); ?>" 
                                     aria-expanded="false">
                                 <i class="fas fa-eye"></i>
                                 View Details
@@ -244,9 +243,9 @@
                     </tr>
                 </tbody>
             </table>
-            <div class="collapse" id="collapse-<?php echo strtolower(str_replace(' ', '-', $data['orderDate'])); ?>">
+            <div class="collapse" id="collapse-<?php echo htmlspecialchars(strtolower(str_replace(' ', '-', $data['orderDate'])), ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="collapse-content">
-                    <h5 class="mb-3">Orders for <?php echo $data['orderDate']; ?></h5>
+                    <h5 class="mb-3">Orders for <?php echo htmlspecialchars($data['orderDate'], ENT_QUOTES, 'UTF-8'); ?></h5>
                     <div class="product-table">
                         <table class="table">
                             <thead>
@@ -259,14 +258,14 @@
                             </thead>
                             <tbody>
                                 <?php
-                                if(count($products) > 0){
-                                    foreach($products as $product){
+                                if (count($products) > 0) {
+                                    foreach ($products as $product) {
                                 ?>
                                 <tr>
-                                    <td><?php echo $product['productID'];?></td>
-                                    <td>$ <?php echo number_format($product['productPrice'], 2);?></td>
-                                    <td><?php echo $product['userID'];?></td>
-                                    <td><?php echo $product['userContact'];?></td>
+                                    <td><?php echo htmlspecialchars($product['productID'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                    <td>$<?php echo number_format(floatval($product['price']), 2); ?></td>
+                                    <td><?php echo htmlspecialchars($product['userID'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                    <td><?php echo htmlspecialchars($product['userContact'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 </tr>
                                 <?php
                                     }
@@ -287,41 +286,86 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-		<?php 
-			if (mysqli_num_rows($saleMonth) > 0) {
-				$monthArr = array();
-				$salesArr = array();
-				
-				while ($monthData = mysqli_fetch_assoc($saleMonth)) {
-					$monthArr[] = $monthData['orderMonth'];
-					$salesArr[] = $monthData['orderCount'];
-				}
-			}
-		?>
-        // Initialize chart with your sales data
+        <?php 
+        if (mysqli_num_rows($saleMonth) > 0) {
+            $monthDataArray = [];
+            while ($monthData = mysqli_fetch_assoc($saleMonth)) {
+                $monthDataArray[] = [
+                    'orderMonth' => ucfirst(strtolower($monthData['orderMonth'])), // Normalize to "January", "February", etc.
+                    'orderCount' => $monthData['orderCount']
+                ];
+            }
+
+            $monthOrder = [
+                'January' => 1, 'February' => 2, 'March' => 3, 'April' => 4,
+                'May' => 5, 'June' => 6, 'July' => 7, 'August' => 8,
+                'September' => 9, 'October' => 10, 'November' => 11, 'December' => 12
+            ];
+
+            // Sort by month order
+            usort($monthDataArray, function($a, $b) use ($monthOrder) {
+                return $monthOrder[$a['orderMonth']] - $monthOrder[$b['orderMonth']];
+            });
+
+            $monthArr = array_map(function($item) {
+                return $item['orderMonth'];
+            }, $monthDataArray);
+
+            $salesArr = array_map(function($item) {
+                return (int)$item['orderCount'];
+            }, $monthDataArray);
+        } else {
+            $monthArr = [];
+            $salesArr = [];
+        }
+        ?>
+
+        // Initialize line chart with monthly sales data
         const ctx = document.getElementById('myChart').getContext('2d');
-		new Chart(ctx, {
-			type: 'bar',
-			data: {
-				labels: <?php echo json_encode($monthArr); ?>,
-				datasets: [{
-					label: 'Sales Data',
-					data: <?php echo json_encode($salesArr); ?>,
-					backgroundColor: 'rgba(82, 110, 253, 0.5)',
-					borderColor: 'rgba(13, 110, 253, 1)',
-					borderWidth: 1
-				}]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				scales: {
-					y: {
-						beginAtZero: true
-					}
-				}
-			}
-		});
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: <?php echo json_encode($monthArr); ?>,
+                datasets: [{
+                    label: 'Monthly Sales',
+                    data: <?php echo json_encode($salesArr); ?>,
+                    backgroundColor: 'rgba(82, 110, 253, 0.2)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 2,
+                    fill: true, 
+                    tension: 0.3 
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Orders'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
     </script>
 </body>
 </html>

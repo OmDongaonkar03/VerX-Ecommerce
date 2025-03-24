@@ -1,33 +1,22 @@
 <?php
 include("admin function.php");
 
-$admin_email = $_SESSION["admin_email"];
-if (!isset($admin_email)) {
+$admin_email = isset($_SESSION["admin_email"]) ? filter_var($_SESSION["admin_email"], FILTER_SANITIZE_EMAIL) : null;
+
+if (!$admin_email || !preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $admin_email)) {
     header("Location: admin login.php");
     exit();
 }
 
-$sql = mysqli_query($conn, "SELECT * FROM `signup` WHERE `Status`='Accepted'");
+$sql = sprintf("SELECT * FROM `signup` WHERE `Status`='%s'", 
+    mysqli_real_escape_string($conn, "Accepted"));
+$result = mysqli_query($conn, $sql);
 
-if(isset($_GET['search'])) {
-    $search = $_GET['search'];
-    $sql = mysqli_query($conn, "SELECT * FROM `signup` WHERE `Status`='Accepted' AND (`name` LIKE '%$search%' OR `email` LIKE '%$search%' OR `id` LIKE '%$search%')");
-}
+$safe_admin_email = mysqli_real_escape_string($conn, $admin_email);
+$admin_details_query = sprintf("SELECT * FROM `admin details` WHERE `admin_email` = '%s'", $safe_admin_email);
+$admin_result = mysqli_query($conn, $admin_details_query);
+$admin_data = mysqli_fetch_assoc($admin_result);
 
-$admin_details_query = mysqli_query($conn, "SELECT * FROM `admin details` WHERE `admin_email` = '$admin_email'");
-$admin_data = mysqli_fetch_assoc($admin_details_query);
-
-if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['terminate'])){   
-    $id = $_POST['id'];
-    $accept = mysqli_query($conn, "UPDATE `signup` SET `Status`='Pending' WHERE `id` = '$id'");
-    
-    if ($accept) {
-        echo "<script>alert('Status updated successfully!');</script>";
-        echo "<script>window.location.href = window.location.href;</script>";
-    } else {
-        echo "<script>alert('Error updating status: " . mysqli_error($conn) . "');</script>";
-    } 
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -107,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['terminate'])){
            align-items: center;
            justify-content: space-between;
        }
-	   
+       
        .table-container {
            background: white;
            border-radius: 12px;
@@ -137,7 +126,9 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['terminate'])){
 </head>
 <body>
     <div class="sidebar" id="sidebar">
-		<?php sidebar() ?>
+        <?php 
+        echo htmlspecialchars(sidebar(), ENT_QUOTES, 'UTF-8'); 
+        ?>
     </div>
 
     <div class="main-content" id="main">
@@ -145,16 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['terminate'])){
             <h2 class="m-0"><i class="fas fa-users me-2"></i>User Details</h2>
         </div>
 
-		<div class="mb-4 px-3">
-			<form method="GET">
-				<div class="input-group">
-					<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search">
-					<button class="btn btn-primary" type="submit">
-						<i class="fas fa-search me-2"></i>Search
-					</button>
-				</div>
-			</form>
-		</div>
+        <div class="mb-4 px-3">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search..." 
+                       aria-label="Search" name="search" id="searchInput">
+            </div>
+        </div>
 
         <div class="table-container">
             <table class="table">
@@ -165,34 +152,40 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['terminate'])){
                         <th>Contact</th>
                         <th>Email</th>
                         <th>Password</th>
-						<?php 
-						$privileges_query = mysqli_query($conn, "SELECT privileges FROM `admin details` WHERE `admin_email` = '$admin_email'");
-						$privileges_data = mysqli_fetch_assoc($privileges_query);
-						$privileges = explode(",", $privileges_data['privileges']);
-						if (in_array('edit', $privileges)) { ?>
-							<th>Action</th>
-						<?php } ?>
+                        <?php 
+                        $safe_admin_email = mysqli_real_escape_string($conn, $admin_email);
+                        $privileges_query = sprintf("SELECT privileges FROM `admin details` WHERE `admin_email` = '%s'", 
+                            $safe_admin_email);
+                        $privileges_result = mysqli_query($conn, $privileges_query);
+                        $privileges_data = mysqli_fetch_assoc($privileges_result);
+                        $privileges = explode(",", htmlspecialchars($privileges_data['privileges'], ENT_QUOTES, 'UTF-8'));
+                        if (in_array('edit', $privileges)) { ?>
+                            <th>Action</th>
+                        <?php } ?>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="display">
                     <?php
-                    if (mysqli_num_rows($sql) > 0) {
-                        while ($data = mysqli_fetch_assoc($sql)) {
+                    if (mysqli_num_rows($result) > 0) {
+                        while ($data = mysqli_fetch_assoc($result)) {
+                            $id = htmlspecialchars($data['id'], ENT_QUOTES, 'UTF-8');
+                            $name = htmlspecialchars($data['name'], ENT_QUOTES, 'UTF-8');
+                            $contact = htmlspecialchars($data['contact'], ENT_QUOTES, 'UTF-8');
+                            $email = htmlspecialchars($data['email'], ENT_QUOTES, 'UTF-8');
+                            $password = htmlspecialchars($data['password'], ENT_QUOTES, 'UTF-8');
                     ?>
                     <tr>
-                        <td><?php echo $data['id']; ?></td>
-                        <td><?php echo $data['name']; ?></td>
-                        <td><?php echo $data['contact']; ?></td>
-                        <td><?php echo $data['email']; ?></td>
-                        <td><?php echo $data['password']; ?></td>
-						<?php if (in_array('edit', $privileges)) { ?>
-							<td>
-								<form method="POST" action="">
-									<input type="hidden" name="id" value="<?php echo $data['id']; ?>">
-									<button type="submit" class="btn btn-danger mt-2" name="terminate">Terminate</button>
-								</form>
-							</td>
-						<?php } ?>
+                        <td><?php echo $id; ?></td>
+                        <td><?php echo $name; ?></td>
+                        <td><?php echo $contact; ?></td>
+                        <td><?php echo $email; ?></td>
+                        <td><?php echo $password; ?></td>
+                        <?php if (in_array('edit', $privileges)) { ?>
+                            <td>
+                                <button type="button" class="btn btn-danger mt-2" 
+                                        onclick="terminate_user(<?php echo urlencode($id); ?>)">Terminate</button>
+                            </td>
+                        <?php } ?>
                     </tr>
                     <?php
                         }
@@ -204,5 +197,34 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['terminate'])){
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', search);
+        
+        function search() {
+            let word = encodeURIComponent(document.getElementById("searchInput").value);
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "user_search";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&input=" + word, true);
+            xhttp.send();
+        }
+        
+        function terminate_user(user) {
+            let safeUser = encodeURIComponent(user);
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "terminate_user";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&user=" + safeUser, true);
+            xhttp.send();
+        }
+    </script>
 </body>
 </html>

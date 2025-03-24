@@ -1,17 +1,22 @@
 <?php
-	include("admin function.php");
-	$admin_email = $_SESSION["admin_email"];
-	if (!isset($_SESSION["admin_email"])) {
-		header("Location: admin login.php");
-		exit();
-	}
-	
-	$sql = mysqli_query($conn,"SELECT * FROM `ordered products` WHERE `Status` != 'Completed'");
-	
-	if(isset($_GET['search'])) {
-		$search =$_GET['search'];
-		$sql = mysqli_query($conn, "SELECT * FROM `ordered products` WHERE `userAddress` LIKE '%$search%' OR `userCity` LIKE '%$search%' OR `userState` LIKE '%$search%' OR `productID` LIKE '%$search%' AND `Status` != 'Completed'");
-	}
+    include("admin function.php");
+
+    if (!isset($_SESSION["admin_email"])) {
+        header("Location: admin_login.php");
+        exit();
+    }
+
+    $admin_email = $_SESSION["admin_email"];
+
+    $privileges_query = mysqli_query($conn, "SELECT privileges FROM `admin details` WHERE `admin_email` = '$admin_email'");
+    if ($privileges_query && mysqli_num_rows($privileges_query) > 0) {
+        $privileges_data = mysqli_fetch_assoc($privileges_query);
+        $privileges = explode(",", $privileges_data['privileges']);
+    } else {
+        $privileges = [];
+    }
+
+    $sql = mysqli_query($conn, "SELECT * FROM `ordered products` WHERE `Status` != 'Completed'");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -115,7 +120,7 @@
 </head>
 <body>
     <div class="sidebar">
-		<?php sidebar() ?>
+        <?php sidebar() ?>
     </div>
 
     <div class="main-content">
@@ -123,18 +128,13 @@
             <i class="fas fa-clipboard-list"></i>
             <h2 class="m-0">Ordered Products</h2>
         </div>
-		
-		<div class="mb-4 px-3">
-			<form method="GET">
-				<div class="input-group">
-					<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search">
-					<button class="btn btn-primary" type="submit">
-						<i class="fas fa-search me-2"></i>Search
-					</button>
-				</div>
-			</form>
-		</div>
-		
+
+        <div class="mb-4 px-3">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search..." id="searchInput">
+            </div>
+        </div>
+
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -147,59 +147,64 @@
                         <th>User City</th>
                         <th>User State</th>
                         <th>Pin Code</th>
-						<?php 
-						$privileges_query = mysqli_query($conn, "SELECT privileges FROM `admin details` WHERE `admin_email` = '$admin_email'");
-						$privileges_data = mysqli_fetch_assoc($privileges_query);
-						$privileges = explode(",", $privileges_data['privileges']);
-						if (in_array('edit', $privileges)) { ?>
-							<th>Action</th>
-						<?php } ?>
+                        <?php if (in_array('edit', $privileges)) { ?>
+                            <th>Action</th>
+                        <?php } ?>
                     </tr>
                 </thead>
-                <tbody>
-                    <?php
-                    if (mysqli_num_rows($sql) > 0) {
-                        while ($data = mysqli_fetch_assoc($sql)) {
-                    ?>
-                    <tr>
-                        <td><?php echo $data['productID']; ?></td>
-                        <td><?php echo $data['productPrice']; ?></td>
-                        <td><?php echo $data['userID']; ?></td>
-                        <td><?php echo $data['userContact']; ?></td>
-                        <td><?php echo $data['userAddress']; ?></td>
-                        <td><?php echo $data['userCity']; ?></td>
-                        <td><?php echo $data['UserState']; ?></td>
-                        <td><?php echo $data['UserPinCode']; ?></td>
-						<?php if (in_array('edit', $privileges)) { ?>
-							<td>
-								<form method="POST" action="">
-									<input type="hidden" name="id" value="<?php echo $data['productID']; ?>">
-									<input type="hidden" name="timeStamp" value="<?php echo $data['Timestamp']; ?>">
-									<button type="submit" class="btn btn-success mt-2" name="completed">Completed</button>
-								</form>
-							</td>
-						<?php } ?>
-                    </tr>
-                    <?php
-                        }
-                    }
-					if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['completed'])) {
-						$id = $_POST['id'];
-						$timeStamp = $_POST['timeStamp'];
-						$accept = mysqli_query($conn, "UPDATE `ordered products` SET `Status` = 'Completed' WHERE `productID` = '$id' && `Timestamp` = '$timeStamp'");
-						if ($accept) {
-							echo "<script>alert('Status Updated successfully!');</script>";
-							echo "<script>window.location.href = window.location.href;</script>";
-						} else {
-							echo "<script>alert('Error.');</script>";
-						}
-					}
-                    ?>
+                <tbody id="display">
+                    <?php if (mysqli_num_rows($sql) > 0) {
+                        while ($data = mysqli_fetch_assoc($sql)) { ?>
+                            <tr>
+                                <td><?php echo $data['productID']; ?></td>
+                                <td><?php echo $data['price']; ?></td>
+                                <td><?php echo $data['userID']; ?></td>
+                                <td><?php echo $data['userContact']; ?></td>
+                                <td><?php echo $data['address']; ?></td>
+                                <td><?php echo $data['city']; ?></td>
+                                <td><?php echo $data['state']; ?></td>
+                                <td><?php echo $data['pinCode']; ?></td>
+                                <?php if (in_array('edit', $privileges)) { ?>
+                                    <td>
+                                        <button type="button" class="btn btn-success mt-2" 
+                                            onclick="complete_order('<?php echo $data['productID']; ?>', '<?php echo $data['orderTime']; ?>')">Completed</button>
+                                    </td>
+                                <?php } ?>
+                            </tr>
+                    <?php } } ?>
                 </tbody>
             </table>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', search);
+
+        function search() {
+            let word = document.getElementById("searchInput").value;
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "orders_search";
+            xhttp.open("GET", "admin_ajax.php?param=" + encodeURIComponent(param) + "&input=" + encodeURIComponent(word), true);
+            xhttp.send();
+        }
+
+        function complete_order(productID, orderTime) {			
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "orders_completed";
+            xhttp.open("GET", "admin_ajax.php?param=" + encodeURIComponent(param) + "&product=" + encodeURIComponent(productID) + "&orderTime=" + encodeURIComponent(orderTime), true);
+            xhttp.send();
+        }
+    </script>
 </body>
 </html>

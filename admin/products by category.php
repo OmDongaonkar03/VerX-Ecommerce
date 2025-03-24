@@ -1,10 +1,14 @@
 <?php 
 include("admin function.php");
-if (!isset($_SESSION["admin_email"])) {
-	header("Location: admin login.php");
-	exit();
+
+$admin_email = isset($_SESSION["admin_email"]) ? filter_var($_SESSION["admin_email"], FILTER_SANITIZE_EMAIL) : null;
+if (!$admin_email || !preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $admin_email)) {
+    header("Location: admin login.php");
+    exit();
 }
-$sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GROUP BY category");
+
+$sql = mysqli_query($conn, "SELECT COUNT(*) AS 'COUNT', category FROM products GROUP BY category");
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -34,7 +38,7 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
         .nav-link {
             color: #fff !important;
             padding: 0.5rem;
-			margin:0 0 6px 0;
+            margin:0 0 6px 0;
             border-radius: 8px;
             transition: all 0.3s;
             display: flex;
@@ -192,11 +196,19 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
         .collapse {
             transition: all 0.3s ease;
         }
+
+        /* Toast container styling */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <?php sidebar() ?>
+        <?php echo htmlspecialchars(sidebar(), ENT_QUOTES, 'UTF-8'); ?>
     </div>
 
     <div class="main-content">
@@ -204,11 +216,16 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
             <i class="fas fa-box"></i>
             <h2 class="m-0">Products by Category</h2>
         </div>
+
+        <!-- Toast Container -->
+        <div class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
         <?php
-        if(mysqli_num_rows($sql) > 0){
-            while($data = mysqli_fetch_assoc($sql)){
-                $category = $data['category'];
-                $products_sql = mysqli_query($conn, "SELECT * FROM products WHERE category='$category'");
+        if (mysqli_num_rows($sql) > 0) {
+            while ($data = mysqli_fetch_assoc($sql)) {
+                $category = mysqli_real_escape_string($conn, $data['category']);
+                $products_sql = sprintf("SELECT * FROM products WHERE category='%s'", $category);
+                $products_result = mysqli_query($conn, $products_sql);
         ?>
         <div class="table-container">
             <table class="table">
@@ -221,11 +238,11 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
                 </thead>
                 <tbody>
                     <tr>
-                        <td><?php echo $data['category'];?></td>
-                        <td><?php echo $data['COUNT'];?></td>
+                        <td><?php echo htmlspecialchars($data['category'], ENT_QUOTES, 'UTF-8'); ?></td>
+                        <td><?php echo htmlspecialchars($data['COUNT'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td>
                             <button class="btn btn-primary" type="button" data-bs-toggle="collapse" 
-                                    data-bs-target="#collapse-<?php echo strtolower($data['category']); ?>" 
+                                    data-bs-target="#collapse-<?php echo htmlspecialchars(strtolower($data['category']), ENT_QUOTES, 'UTF-8'); ?>" 
                                     aria-expanded="false">
                                 <i class="fas fa-eye"></i>
                                 View
@@ -234,9 +251,9 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
                     </tr>
                 </tbody>
             </table>
-            <div class="collapse" id="collapse-<?php echo strtolower($data['category']); ?>">
+            <div class="collapse" id="collapse-<?php echo htmlspecialchars(strtolower($data['category']), ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="collapse-content">
-                    <h5 class="mb-3">Products in <?php echo $data['category']; ?></h5>
+                    <h5 class="mb-3">Products in <?php echo htmlspecialchars($data['category'], ENT_QUOTES, 'UTF-8'); ?></h5>
                     <div class="product-table">
                         <table class="table">
                             <thead>
@@ -253,25 +270,35 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
                             </thead>
                             <tbody>
                                 <?php
-                                if(mysqli_num_rows($products_sql) > 0){
-                                    while($product = mysqli_fetch_assoc($products_sql)){
+                                if (mysqli_num_rows($products_result) > 0) {
+                                    while ($product = mysqli_fetch_assoc($products_result)) {
+                                        $productID = htmlspecialchars($product['productID'], ENT_QUOTES, 'UTF-8');
+                                        $productName = htmlspecialchars($product['productName'], ENT_QUOTES, 'UTF-8');
+                                        $price = htmlspecialchars($product['price'], ENT_QUOTES, 'UTF-8');
+                                        $discount = htmlspecialchars($product['discount'], ENT_QUOTES, 'UTF-8');
+                                        $description = htmlspecialchars($product['description'], ENT_QUOTES, 'UTF-8');
+                                        $quantity = htmlspecialchars($product['quantity'], ENT_QUOTES, 'UTF-8');
+                                        $colors = implode(", ", array_map(function($color) {
+                                            return htmlspecialchars(trim($color), ENT_QUOTES, 'UTF-8');
+                                        }, explode(",", $product['colors'])));
+                                        $status = htmlspecialchars($product['status'], ENT_QUOTES, 'UTF-8');
                                 ?>
                                 <tr>
-                                    <td><?php echo $product['productID']; ?></td>
-                                    <td><?php echo $product['productName']; ?></td>
-                                    <td>$ <?php echo $product['price']; ?></td>
-                                    <td><?php echo $product['discount']; ?>%</td>
-                                    <td><?php echo $product['description']; ?></td>
-                                    <td><?php echo $product['quantity']; ?></td>
-                                    <td><?php echo implode(", ", explode(",", $product['colors']));?></td>
-                                    <td><?php echo $product['status']; ?></td>
+                                    <td><?php echo $productID; ?></td>
+                                    <td><?php echo $productName; ?></td>
+                                    <td>$ <?php echo $price; ?></td>
+                                    <td><?php echo $discount; ?>%</td>
+                                    <td><?php echo $description; ?></td>
+                                    <td><?php echo $quantity; ?></td>
+                                    <td><?php echo $colors; ?></td>
+                                    <td><?php echo $status; ?></td>
                                 </tr>
                                 <?php
                                     }
                                 } else {
                                 ?>
                                 <tr>
-                                    <td colspan="9" class="text-center">No products found in this category</td>
+                                    <td colspan="8" class="text-center">No products found in this category</td>
                                 </tr>
                                 <?php
                                 }
@@ -284,6 +311,8 @@ $sql = mysqli_query($conn,"SELECT COUNT(*) AS 'COUNT',category FROM products GRO
         </div>
         <?php
             }
+        } else {
+            echo "<script>showToast('No categories found.', 'danger');</script>";
         }
         ?>
     </div>

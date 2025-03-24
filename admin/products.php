@@ -1,16 +1,19 @@
 <?php
-	include("admin function.php");
-	$admin_email = $_SESSION["admin_email"];
-	$sql = mysqli_query($conn,"SELECT * FROM `products`");
-	if (!isset($_SESSION["admin_email"])) {
-		header("Location: admin login.php");
-		exit();
-	}
-	
-	if(isset($_GET['search'])) {
-		$search =$_GET['search'];
-		$sql = mysqli_query($conn, "SELECT * FROM `products` WHERE `productName` LIKE '%$search%' OR `category` LIKE '%$search%' OR `description` LIKE '%$search%' OR `productID` LIKE '%$search%'");
-	}
+include("admin function.php");
+
+$admin_email = isset($_SESSION["admin_email"]) ? filter_var($_SESSION["admin_email"], FILTER_SANITIZE_EMAIL) : null;
+if (!$admin_email || !preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $admin_email)) {
+    header("Location: admin login.php");
+    exit();
+}
+
+$sql = mysqli_query($conn, "SELECT * FROM `products`");
+
+$safe_admin_email = mysqli_real_escape_string($conn, $admin_email);
+$privileges_query = sprintf("SELECT privileges FROM `admin details` WHERE `admin_email` = '%s'", $safe_admin_email);
+$privileges_result = mysqli_query($conn, $privileges_query);
+$privileges_data = mysqli_fetch_assoc($privileges_result);
+$privileges = explode(",", htmlspecialchars($privileges_data['privileges'], ENT_QUOTES, 'UTF-8'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -129,26 +132,23 @@
 </head>
 <body>
     <div class="sidebar" id="sidebar">
-        <?php sidebar() ?>
+        <?php 
+        echo htmlspecialchars(sidebar(), ENT_QUOTES, 'UTF-8'); 
+        ?>
     </div>
 
     <div class="main-content" id="main">
         <div class="header">
             <h2 class="m-0">Product Details</h2>
         </div>
-		
-		
-		<div class="mb-4 px-3">
-			<form method="GET">
-				<div class="input-group">
-					<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search">
-					<button class="btn btn-primary" type="submit">
-						<i class="fas fa-search me-2"></i>Search
-					</button>
-				</div>
-			</form>
-		</div>
-		
+
+        <div class="mb-4 px-3">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search..." 
+                       aria-label="Search" name="search" id="searchInput">
+            </div>
+        </div>
+        
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -162,52 +162,47 @@
                         <th>Quantity</th>
                         <th>Colors</th>
                         <th>Status</th>
-						<?php 
-						$privileges_query = mysqli_query($conn, "SELECT privileges FROM `admin details` WHERE `admin_email` = '$admin_email'");
-						$privileges_data = mysqli_fetch_assoc($privileges_query);
-						$privileges = explode(",", $privileges_data['privileges']);
-						if (in_array('edit', $privileges)) { ?>
-							<th>Action</th>
-						<?php } ?>
+                        <?php if (in_array('edit', $privileges)) { ?>
+                            <th>Action</th>
+                        <?php } ?>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="display">
                     <?php
                     if (mysqli_num_rows($sql) > 0) {
                         while ($data = mysqli_fetch_assoc($sql)) {
+                            $productID = htmlspecialchars($data['productID'], ENT_QUOTES, 'UTF-8');
+                            $productName = htmlspecialchars($data['productName'], ENT_QUOTES, 'UTF-8');
+                            $category = htmlspecialchars($data['category'], ENT_QUOTES, 'UTF-8');
+                            $price = htmlspecialchars($data['price'], ENT_QUOTES, 'UTF-8');
+                            $discount = htmlspecialchars($data['discount'], ENT_QUOTES, 'UTF-8');
+                            $description = htmlspecialchars($data['description'], ENT_QUOTES, 'UTF-8');
+                            $quantity = htmlspecialchars($data['quantity'], ENT_QUOTES, 'UTF-8');
+                            $colors = implode(", ", array_map(function($color) {
+                                return htmlspecialchars(trim($color), ENT_QUOTES, 'UTF-8');
+                            }, explode(",", $data['colors'])));
+                            $status = htmlspecialchars($data['status'], ENT_QUOTES, 'UTF-8');
                     ?>
                     <tr>
-                        <td><?php echo $data['productID'];?></td>
-                        <td><?php echo $data['productName'];?></td>
-                        <td><?php echo $data['category'];?></td>
-                        <td><?php echo $data['price'];?></td>
-                        <td><?php echo $data['discount'];?></td>
-                        <td class="description-cell"><?php echo $data['description'];?></td>
-                        <td><?php echo $data['quantity'];?></td>
-                        <td><?php echo implode(", ", explode(",", $data['colors']));?></td>
-                        <td><?php echo $data['status'];?></td>
-						<?php if (in_array('edit', $privileges)) { ?>
-							<td>
-								<form method="POST" action="">
-									<input type="hidden" name="id" value="<?php echo $data['productID']; ?>">
-									<button type="submit" class="btn btn-danger mt-2" name="remove">Remove</button>
-								</form>
-							</td>
-						<?php } ?>
+                        <td><?php echo $productID; ?></td>
+                        <td><?php echo $productName; ?></td>
+                        <td><?php echo $category; ?></td>
+                        <td><?php echo $price; ?></td>
+                        <td><?php echo $discount; ?></td>
+                        <td class="description-cell"><?php echo $description; ?></td>
+                        <td><?php echo $quantity; ?></td>
+                        <td><?php echo $colors; ?></td>
+                        <td><?php echo $status; ?></td>
+                        <?php if (in_array('edit', $privileges)) { ?>
+                            <td>
+                                <button type="button" class="btn btn-danger mt-2" 
+                                        onclick="remove_prod(<?php echo urlencode($productID); ?>)">Remove</button>
+                            </td>
+                        <?php } ?>
                     </tr>
                     <?php
                         }
                     }
-					if ($_SERVER['REQUEST_METHOD'] == "POST" && isset($_POST['remove'])) {
-						$id = $_POST['id'];
-						$accept = mysqli_query($conn, "DELETE FROM `products` WHERE `productID` = '$id'");
-						if ($accept) {
-							echo "<script>alert('Removed successfully!');</script>";
-							echo "<script>window.location.href = window.location.href;</script>";
-						} else {
-							echo "<script>alert('Error while Removing.');</script>";
-						}
-					}
                     ?>
                 </tbody>
             </table>
@@ -215,5 +210,34 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', search);
+        
+        function search() {
+            let word = encodeURIComponent(document.getElementById("searchInput").value);
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "product_search";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&input=" + word, true);
+            xhttp.send();
+        }
+        
+        function remove_prod(product) {
+            let safeProduct = encodeURIComponent(product);
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "remove_product";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&product=" + safeProduct, true);
+            xhttp.send();
+        }
+    </script>
 </body>
 </html>

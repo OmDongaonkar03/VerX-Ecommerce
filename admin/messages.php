@@ -1,16 +1,13 @@
 <?php
-	include("admin function.php");
-	if (!isset($_SESSION["admin_email"])) {
-		header("Location: admin login.php");
-		exit();
-	}
-	
-	$sql = mysqli_query($conn,"SELECT * FROM `connect request`");
-	
-	if(isset($_GET['search'])) {
-		$search =$_GET['search'];
-		$sql = mysqli_query($conn, "SELECT * FROM `connect request` WHERE `userName` LIKE '%$search%' OR `userEmail` LIKE '%$search%'");
-	}
+include("admin function.php");
+
+$admin_email = isset($_SESSION["admin_email"]) ? filter_var($_SESSION["admin_email"], FILTER_SANITIZE_EMAIL) : null;
+if (!$admin_email || !preg_match("/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $admin_email)) {
+    header("Location: admin login.php");
+    exit();
+}
+
+$sql = mysqli_query($conn, "SELECT * FROM `connect request`");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -126,26 +123,20 @@
 </head>
 <body>
     <div class="sidebar" id="sidebar">
-        <?php sidebar() ?>
+        <?php echo htmlspecialchars(sidebar(), ENT_QUOTES, 'UTF-8'); ?>
     </div>
 
     <div class="main-content" id="main">
         <div class="header">
             <h2 class="m-0"><i class="fas fa-comments me-2"></i>Messages From Users</h2>
         </div>
-		
-		
-		<div class="mb-4 px-3">
-			<form method="GET">
-				<div class="input-group">
-					<input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search">
-					<button class="btn btn-primary" type="submit">
-						<i class="fas fa-search me-2"></i>Search
-					</button>
-				</div>
-			</form>
-		</div>
-		
+        
+        <div class="mb-4 px-3">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search..." aria-label="Search" name="search" id="searchInput">
+            </div>
+        </div>
+        
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -155,18 +146,23 @@
                         <th>Message</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="display">
                     <?php
                     if (mysqli_num_rows($sql) > 0) {
                         while ($data = mysqli_fetch_assoc($sql)) {
+                            $userName = htmlspecialchars($data['userName'], ENT_QUOTES, 'UTF-8');
+                            $userEmail = htmlspecialchars($data['userEmail'], ENT_QUOTES, 'UTF-8');
+                            $userMSG = htmlspecialchars($data['userMSG'], ENT_QUOTES, 'UTF-8');
                     ?>
                     <tr>
-                        <td><?php echo $data['userName']; ?></td>
-                        <td><?php echo $data['userEmail']; ?></td>
-                        <td class="message-cell"><?php echo $data['userMSG']; ?></td>
+                        <td><?php echo $userName; ?></td>
+                        <td><?php echo $userEmail; ?></td>
+                        <td class="message-cell"><?php echo $userMSG; ?></td>
                     </tr>
                     <?php
                         }
+                    } else {
+                        echo '<tr><td colspan="3">No messages found.</td></tr>';
                     }
                     ?>
                 </tbody>
@@ -175,5 +171,22 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', search);
+        
+        function search() {
+            let word = encodeURIComponent(document.getElementById("searchInput").value);
+            
+            let xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function () {
+                if (this.readyState == 4 && this.status == 200) {
+                    document.getElementById("display").innerHTML = this.responseText;
+                }
+            };
+            let param = "msg_search";
+            xhttp.open("GET", "admin_ajax.php?param=" + param + "&input=" + word, true);
+            xhttp.send();
+        }
+    </script>
 </body>
 </html>
